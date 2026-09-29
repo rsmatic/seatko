@@ -1,0 +1,19 @@
+{
+  "name": "seatko",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Ticketing management system: events, seat maps, pricing, QR tickets and check-in",
+  "workspaces": [
+    "api",
+    "web"
+  ],
+  "scripts": {
+    "dev": "concurrently -n api,web -c yellow,cyan \"npm run dev -w api\" \"npm run dev -w web\"",
+    "build": "npm run build -w web",
+    "start": "npm start -w api",
+    "seed": "npm run seed -w api"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}
