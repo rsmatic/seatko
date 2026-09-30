@@ -150,6 +150,12 @@ const hasColumn = (table, col) => db.prepare(`PRAGMA table_info(${table})`).all(
 if (!hasColumn('events', 'show_on_website')) {
   db.exec('ALTER TABLE events ADD COLUMN show_on_website INTEGER NOT NULL DEFAULT 1');
 }
+if (!hasColumn('sections', 'pos_x')) {
+  // Seat-plan layout: section center in px relative to the stage's center line (NULL = auto-arranged).
+  db.exec('ALTER TABLE sections ADD COLUMN pos_x REAL');
+  db.exec('ALTER TABLE sections ADD COLUMN pos_y REAL');
+  db.exec('ALTER TABLE sections ADD COLUMN angle REAL NOT NULL DEFAULT 0');
+}
 if (!hasColumn('events', 'logo')) {
   // Optional per-event logo: replaces the default logo on that event's tickets and QR codes.
   db.exec('ALTER TABLE events ADD COLUMN logo TEXT');

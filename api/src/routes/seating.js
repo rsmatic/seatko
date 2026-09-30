@@ -105,6 +105,29 @@ r.delete('/sections/:sectionId', requireRole(...MANAGE), h((req, res) => {
   res.json({ ok: true });
 }));
 
+// Save the seat-plan layout: where each section sits relative to the stage, and its rotation.
+// pos_x/pos_y = null puts a section back into the automatic row.
+r.put('/layout', requireRole(...MANAGE), h((req, res) => {
+  const ev = getEvent(req.params.id);
+  const items = Array.isArray(req.body.sections) ? req.body.sections : [];
+  const num = (v, field, min, max) => {
+    if (v === null || v === undefined) return null;
+    const n = Number(v);
+    if (!Number.isFinite(n) || n < min || n > max) throw bad(`${field} is out of range`);
+    return Math.round(n * 10) / 10;
+  };
+  const upd = db.prepare('UPDATE sections SET pos_x = ?, pos_y = ?, angle = ? WHERE id = ? AND event_id = ?');
+  db.transaction(() => {
+    for (const s of items) {
+      const x = num(s.pos_x, 'Position', -10000, 10000);
+      const y = num(s.pos_y, 'Position', -10000, 10000);
+      upd.run(x, x === null ? null : y, num(s.angle, 'Angle', -180, 180) ?? 0, Number(s.id), ev.id);
+    }
+  })();
+  audit(req, 'update_layout', 'event', ev.id, { sections: items.length });
+  res.json(db.prepare('SELECT * FROM sections WHERE event_id = ? ORDER BY sort, id').all(ev.id));
+}));
+
 // Bulk seat operations: block / unblock / assign tier. Sold seats are never touched.
 r.post('/seats/bulk', requireRole(...MANAGE), h((req, res) => {
   const ev = getEvent(req.params.id);

@@ -91,8 +91,8 @@ r.post('/:id/duplicate', requireRole(...MANAGE), h((req, res) => {
     }
     for (const s of db.prepare('SELECT * FROM sections WHERE event_id = ?').all(ev.id)) {
       const { lastInsertRowid: secId } = db.prepare(`
-        INSERT INTO sections (event_id, name, tier_id, rows, seats_per_row, sort) VALUES (?, ?, ?, ?, ?, ?)
-      `).run(newId, s.name, tierMap.get(s.tier_id) ?? null, s.rows, s.seats_per_row, s.sort);
+        INSERT INTO sections (event_id, name, tier_id, rows, seats_per_row, sort, pos_x, pos_y, angle) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(newId, s.name, tierMap.get(s.tier_id) ?? null, s.rows, s.seats_per_row, s.sort, s.pos_x, s.pos_y, s.angle);
       const ins = db.prepare(`
         INSERT INTO seats (event_id, section_id, row_label, row_index, number, tier_id, status) VALUES (?, ?, ?, ?, ?, ?, ?)
       `);

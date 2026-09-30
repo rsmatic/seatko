@@ -181,11 +181,17 @@ dl.details dd { margin: 0; }
 
 /* ---------- seat map ---------- */
 .seatmap { overflow-x: auto; padding-bottom: .5rem; }
-.stage { margin: 0 auto 1.5rem; width: min(70%, 520px); text-align: center; padding: .5rem; border-radius: 0 0 50% 50% / 0 0 100% 100%; background: linear-gradient(#2a2a31, #1a1a1f); color: var(--muted); font: 600 .8rem var(--display); letter-spacing: .4em; }
-.sections { display: flex; gap: 2rem; justify-content: center; align-items: flex-start; width: max-content; min-width: 100%; }
-.section { display: flex; flex-direction: column; gap: 3px; align-items: center; }
+.seat-fit { margin: 0 auto; }
+.seat-canvas { position: relative; transform-origin: top left; }
+.stage { position: absolute; display: grid; place-items: center; border-radius: 0 0 50% 50% / 0 0 100% 100%; background: linear-gradient(#2a2a31, #1a1a1f); color: var(--muted); font: 600 .8rem var(--display); letter-spacing: .4em; }
+.section { position: absolute; width: max-content; display: flex; flex-direction: column; gap: 3px; align-items: center; transform-origin: center; border-radius: 10px; }
+.arranging .section { cursor: grab; outline: 1px dashed var(--border); outline-offset: 6px; touch-action: none; user-select: none; }
+.arranging .section:hover, .arranging .section.active { outline: 2px dashed var(--accent); }
+.arranging .section:active { cursor: grabbing; }
+.arranging .seat, .arranging .row-label { pointer-events: none; }
 .section-name { font-size: .75rem; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); margin-bottom: .4rem; }
 .seat-row { display: flex; gap: 3px; align-items: center; }
+.seat-row > * { flex-shrink: 0; }
 .row-label { width: 20px; font-size: .7rem; color: var(--muted); background: none; border: 0; cursor: pointer; padding: 0; font-family: var(--font); }
 .row-label:hover { color: var(--accent); }
 .seat {

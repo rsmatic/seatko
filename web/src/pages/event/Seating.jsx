@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { api } from '../../api.js';
 import { useAction, useLoad } from '../../state.jsx';
 import { Empty, Field, Loadable, Modal, confirmAction } from '../../components/ui.jsx';
@@ -20,6 +20,34 @@ export default function Seating({ event, reloadEvent }) {
     setSelected(new Set());
     refresh();
     return r;
+  };
+
+  // Layout editing: `draft` holds positions while arranging; positionsRef gets the full computed
+  // layout (including auto-placed sections) from SeatMap so saving pins everything where it looks.
+  const [arrange, setArrange] = useState(false);
+  const [draft, setDraft] = useState(null);
+  const [active, setActive] = useState(null);
+  const positionsRef = useRef(null);
+
+  const startArrange = (sections) => {
+    setDraft(new Map(sections.map((s) => [s.id, { x: s.pos_x, y: s.pos_y, angle: s.angle || 0 }])));
+    setActive(null);
+    setSelected(new Set());
+    setArrange(true);
+  };
+
+  const rotate = (delta) => {
+    const next = new Map([...positionsRef.current].map(([k, v]) => [k, { ...v }]));
+    const p = next.get(active);
+    p.angle = delta === null ? 0 : (((p.angle || 0) + delta + 540) % 360) - 180;
+    setDraft(next);
+  };
+
+  const saveLayout = async () => {
+    const body = { sections: [...positionsRef.current].map(([id, p]) => ({ id, pos_x: p.x, pos_y: p.y, angle: p.angle || 0 })) };
+    await run(() => api(`/events/${event.id}/layout`, { method: 'PUT', body }), 'Layout saved');
+    setArrange(false);
+    map.reload();
   };
 
   const removeSection = async (sec) => {
@@ -71,8 +99,37 @@ export default function Seating({ event, reloadEvent }) {
           </section>
 
           <section className="card">
-            <h3>Seat map</h3>
-            {!sections.length ? <Empty title="No sections yet">Add a section to generate seats.</Empty> : (
+            <div className="split">
+              <h3>Seat map</h3>
+              {sections.length > 0 && !arrange && (
+                <button className="btn btn-sm" onClick={() => startArrange(sections)}>Arrange layout</button>
+              )}
+            </div>
+            {!sections.length ? <Empty title="No sections yet">Add a section to generate seats.</Empty> : arrange ? (
+              <>
+                <p className="muted small">
+                  Drag sections to place them around the stage. Click one to select it, then rotate it or nudge it with the arrow keys (Shift = bigger steps).
+                  The box office uses the same layout.
+                </p>
+                <div className="toolbar">
+                  {active ? (
+                    <>
+                      <strong>{sections.find((s) => s.id === active)?.name}</strong>
+                      <button className="btn btn-sm" onClick={() => rotate(-15)} aria-label="Rotate left 15 degrees">⟲ 15°</button>
+                      <button className="btn btn-sm" onClick={() => rotate(15)} aria-label="Rotate right 15 degrees">⟳ 15°</button>
+                      <span className="small muted">{Math.round(draft?.get(active)?.angle || 0)}°</span>
+                      <button className="btn btn-sm btn-ghost" onClick={() => rotate(null)}>Straighten</button>
+                    </>
+                  ) : <span className="muted small">Select a section to rotate it</span>}
+                  <span className="grow" />
+                  <button className="btn btn-sm btn-ghost" onClick={() => { setDraft(new Map()); setActive(null); }}>Auto-arrange</button>
+                  <button className="btn btn-sm" onClick={() => setArrange(false)}>Cancel</button>
+                  <button className="btn btn-sm btn-primary" onClick={saveLayout} disabled={busy}>Save layout</button>
+                </div>
+                <SeatMap sections={sections} seats={seats} tiers={event.tiers} selected={new Set()} onChange={() => {}} mode="edit"
+                  arrange layout={draft} onLayoutChange={setDraft} activeSection={active} onActivate={setActive} positionsRef={positionsRef} />
+              </>
+            ) : (
               <>
                 <p className="muted small">Click or drag across seats to select them, or click a row letter to select the whole row. Sold seats cannot be changed.</p>
                 <div className={`toolbar ${selected.size ? '' : 'toolbar-idle'}`}>
