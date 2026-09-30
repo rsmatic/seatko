@@ -66,6 +66,20 @@ The camera scanner needs **HTTPS** (or localhost) on phones.
 
 For the website embed, add `data-app-url="https://rsmatic.github.io/seatko"` so "View my ticket" opens the Pages app.
 
+### Current deployment
+
+- **Web app:** https://rsmatic.github.io/seatko/ (GitHub Pages, `VITE_API_URL` repo variable)
+- **API:** https://seatko.54-227-48-13.sslip.io, the `seatko-api` Docker container on the shared EC2 host. It sits behind orderko's Caddy via `~/eaglemark/caddy/seatko.caddy`. Data is in the `seatko_seatko-data` volume.
+
+To update the API after pushing to `main`:
+
+```bash
+ssh -i rsmatic.pem ec2-user@54.227.48.13
+cd ~/seatko && git pull && sudo docker compose -f deploy/docker-compose.yml up -d --build
+```
+
+Back up the database with `sudo docker cp seatko-api:/app/api/data ./seatko-backup`.
+
 ## Show tickets on the band website
 
 The API serves an embed script that shows live prices, "X left" / sold-out status, a buy button and a "View my ticket" lookup on any website. For example, add it to the `#concert` section of the POIMEN site:
