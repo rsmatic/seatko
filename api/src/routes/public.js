@@ -23,6 +23,7 @@ function publicEvent(ev) {
     id: ev.id, title: ev.title, artist: ev.artist, description: ev.description, venue: ev.venue, address: ev.address,
     starts_at: ev.starts_at, doors_at: ev.doors_at, status: ev.status,
     poster_url: ev.poster ? `/uploads/${ev.poster}` : null,
+    logo_url: ev.logo ? `/uploads/${ev.logo}` : null,
     currency: getSettings().currency, tiers,
   };
 }
@@ -58,7 +59,8 @@ function sendSvg(res, svg) {
 r.get('/qr/:code.svg', h((req, res) => {
   const code = req.params.code.toUpperCase();
   if (!CODE.test(code)) throw notFound('Ticket');
-  sendSvg(res, qrSvg(code, { size: int(req.query.size, 'Size', { min: 64, max: 2048 }) ?? 512 }));
+  const ev = db.prepare('SELECT e.logo FROM tickets k JOIN events e ON e.id = k.event_id WHERE k.code = ?').get(code);
+  sendSvg(res, qrSvg(code, { size: int(req.query.size, 'Size', { min: 64, max: 2048 }) ?? 512, eventLogo: ev?.logo }));
 }));
 
 // Preview used by the settings page (lets the admin try colors before saving).
@@ -71,7 +73,8 @@ r.get('/tickets/:code', h((req, res) => {
   const t = db.prepare(`
     SELECT k.code, k.status, k.tier_name, k.seat_label, k.holder_name, k.price_cents, k.checked_in_at,
            t.color AS tier_color, o.reference AS order_reference,
-           e.id AS event_id, e.title, e.artist, e.venue, e.address, e.starts_at, e.doors_at, e.poster, e.status AS event_status
+           e.id AS event_id, e.title, e.artist, e.venue, e.address, e.starts_at, e.doors_at, e.poster, e.status AS event_status,
+           CASE WHEN e.logo IS NOT NULL THEN '/uploads/' || e.logo END AS logo_url
     FROM tickets k JOIN orders o ON o.id = k.order_id JOIN events e ON e.id = k.event_id LEFT JOIN tiers t ON t.id = k.tier_id
     WHERE k.code = ?
   `).get(req.params.code.toUpperCase());

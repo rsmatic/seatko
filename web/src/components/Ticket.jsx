@@ -10,7 +10,7 @@ const Ticket = forwardRef(function Ticket({ t, settings }, ref) {
     <div className={`ticket ticket-${t.status}`} ref={ref} style={{ '--accent': accent, '--tier': t.tier_color || accent }}>
       <div className="ticket-main">
         <div className="ticket-brand">
-          {settings?.logo_url && <img src={assetUrl(settings.logo_url)} alt="" />}
+          {(t.logo_url || settings?.logo_url) && <img src={assetUrl(t.logo_url || settings.logo_url)} alt="" />}
           <span>{settings?.org_name}</span>
           <span className="ticket-tier">{t.tier_name}</span>
         </div>

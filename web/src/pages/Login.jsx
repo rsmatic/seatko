@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { assetUrl } from '../api.js';
+import { SEATKO_LOGO } from '../api.js';
 import { useApp } from '../state.jsx';
 
 export default function Login() {
@@ -31,9 +31,9 @@ export default function Login() {
   return (
     <div className="login-wrap">
       <form className="login-card" onSubmit={submit}>
-        {settings?.logo_url && <img src={assetUrl(settings.logo_url)} alt="" className="login-logo" />}
-        <h1>{settings?.org_name || 'Seatko'}</h1>
-        <p className="muted">{settings?.org_tagline || 'Ticketing management'}</p>
+        <img src={SEATKO_LOGO} alt="" className="login-logo" />
+        <h1>Seatko</h1>
+        <p className="muted">{settings?.org_name ? `Ticketing for ${settings.org_name}` : 'Ticketing management'}</p>
         {error && <div className="alert alert-error">{error}</div>}
         <label className="field">
           <span className="field-label">Email</span>

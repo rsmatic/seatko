@@ -75,7 +75,8 @@ input[type='radio'], input[type='checkbox'] { width: auto; accent-color: var(--a
 .shell { display: grid; grid-template-columns: 240px 1fr; min-height: 100vh; }
 .sidebar { background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 1rem .75rem; position: sticky; top: 0; height: 100vh; }
 .brand { display: flex; align-items: center; gap: .7rem; padding: .25rem .5rem 1.25rem; }
-.brand-logo { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; }
+.brand-logo { width: 40px; height: 40px; border-radius: 10px; }
+.brand-logo-sm { width: 28px; height: 28px; border-radius: 7px; }
 .brand-name { font: 600 1.15rem var(--display); letter-spacing: .08em; }
 .brand-sub { font-size: .75rem; color: var(--muted); }
 nav { display: flex; flex-direction: column; gap: 2px; }
@@ -241,7 +242,7 @@ dl.details dd { margin: 0; }
 .login-wrap { min-height: 100vh; display: grid; place-items: center; padding: 1rem; background: radial-gradient(ellipse at top, #1d1a14, var(--bg) 60%); }
 .login-card { width: min(380px, 100%); background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 2rem; text-align: center; }
 .login-card .field { text-align: left; }
-.login-logo { width: 84px; height: 84px; border-radius: 50%; object-fit: cover; margin-bottom: .75rem; }
+.login-logo { width: 84px; height: 84px; border-radius: 20px; margin-bottom: .75rem; }
 .login-card h1 { justify-content: center; letter-spacing: .15em; margin-bottom: .1rem; }
 .login-card p { margin: 0 0 1.5rem; }
 
@@ -346,3 +347,8 @@ dl.details dd { margin: 0; }
 
 .check { display: flex; gap: .6rem; align-items: flex-start; margin-bottom: .9rem; cursor: pointer; }
 .check input { margin-top: .25rem; }
+
+.logo-pick { display: flex; gap: 1rem; align-items: center; }
+.logo-pick .field-hint { display: block; margin-top: .4rem; }
+.logo-default { opacity: .45; filter: grayscale(1); }
+.logo-thumb-sm { width: 40px; height: 40px; }

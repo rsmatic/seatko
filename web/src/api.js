@@ -65,3 +65,6 @@ export async function download(path, filename) {
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+
+/** The Seatko app's own logo (served from web/public). */
+export const SEATKO_LOGO = `${import.meta.env.BASE_URL}seatko.svg`;

@@ -7,7 +7,7 @@ import { Meter, Stat, confirmAction } from '../../components/ui.jsx';
 import EventForm from '../../components/EventForm.jsx';
 
 export default function Overview({ event, reloadEvent }) {
-  const { can } = useApp();
+  const { can, settings } = useApp();
   const nav = useNavigate();
   const [run, busy] = useAction();
   const [editing, setEditing] = useState(false);
@@ -51,6 +51,12 @@ export default function Overview({ event, reloadEvent }) {
             <dt>Show</dt><dd>{timeOnly(event.starts_at)}{event.doors_at && ` · doors ${timeOnly(event.doors_at)}`}</dd>
             <dt>Venue</dt><dd>{event.venue || '—'}{event.address && <div className="muted small">{event.address}</div>}</dd>
             <dt>Per order</dt><dd>Max {event.max_per_order} tickets</dd>
+            <dt>Ticket logo</dt>
+            <dd className="logo-pick">
+              <img className={`logo-thumb logo-thumb-sm ${event.logo ? '' : 'logo-default'}`}
+                src={assetUrl(event.logo ? `/uploads/${event.logo}` : settings?.logo_url)} alt="" />
+              <span className="small muted">{event.logo ? 'Event logo, shown on QR codes and tickets' : 'Default logo'}{manage && ' · change it in Edit'}</span>
+            </dd>
             <dt>Updated</dt><dd>{dateTime(event.updated_at)}</dd>
           </dl>
           {event.description && <p className="pre">{event.description}</p>}

@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { api } from '../api.js';
+import { useEffect, useRef, useState } from 'react';
+import { api, assetUrl } from '../api.js';
 import { useAction, useApp } from '../state.jsx';
 import { STATUS_LABEL } from '../format.js';
 import { Field, Modal } from './ui.jsx';
@@ -21,13 +21,34 @@ export default function EventForm({ event, onClose, onSaved }) {
   });
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
 
+  // Event logo: a newly picked file, or a request to remove the current one.
+  const fileRef = useRef(null);
+  const [logoFile, setLogoFile] = useState(null);
+  const [removeLogo, setRemoveLogo] = useState(false);
+  const [preview, setPreview] = useState(null);
+  useEffect(() => {
+    if (!logoFile) return setPreview(null);
+    const url = URL.createObjectURL(logoFile);
+    setPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [logoFile]);
+  const current = !removeLogo && event?.logo ? assetUrl(`/uploads/${event.logo}`) : null;
+  const shown = preview ?? current;
+
   const submit = async (e) => {
     e.preventDefault();
     const body = { ...f, max_per_order: Number(f.max_per_order) };
-    const saved = await run(
+    let saved = await run(
       () => (event ? api(`/events/${event.id}`, { method: 'PATCH', body }) : api('/events', { method: 'POST', body })),
       event ? 'Event saved' : 'Event created. Now add ticket prices.',
     );
+    if (logoFile) {
+      const fd = new FormData();
+      fd.append('logo', logoFile);
+      saved = await run(() => api(`/events/${saved.id}/logo`, { method: 'POST', body: fd }));
+    } else if (removeLogo && event?.logo) {
+      saved = await run(() => api(`/events/${saved.id}/logo`, { method: 'DELETE' }));
+    }
     onSaved?.(saved);
     onClose();
   };
@@ -51,6 +72,26 @@ export default function EventForm({ event, onClose, onSaved }) {
         </Field>
         <Field label="Address" span={2}><input value={f.address} onChange={set('address')} /></Field>
         <Field label="Description" span={2}><textarea rows={4} value={f.description} onChange={set('description')} /></Field>
+
+        <div className="field span-2">
+          <span className="field-label">Event logo (optional)</span>
+          <div className="logo-pick">
+            <img className={`logo-thumb ${shown ? '' : 'logo-default'}`} src={shown ?? assetUrl(settings?.logo_url)} alt="" />
+            <div>
+              <div className="btn-row" style={{ marginTop: 0 }}>
+                <button type="button" className="btn btn-sm" onClick={() => fileRef.current.click()}>{shown ? 'Change logo' : 'Upload logo'}</button>
+                {shown && <button type="button" className="btn btn-sm btn-ghost" onClick={() => { setLogoFile(null); setRemoveLogo(true); }}>Remove</button>}
+              </div>
+              <span className="field-hint">
+                {shown ? 'Shown in the middle of this event\'s QR codes and on its tickets.'
+                  : 'Uses the default logo from Branding & settings. Upload one to use a different logo for this event. Square images work best.'}
+              </span>
+            </div>
+            <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" hidden
+              onChange={(e) => { if (e.target.files[0]) { setLogoFile(e.target.files[0]); setRemoveLogo(false); } e.target.value = ''; }} />
+          </div>
+        </div>
+
         <label className="check span-2">
           <input type="checkbox" checked={f.show_on_website} onChange={(e) => setF({ ...f, show_on_website: e.target.checked })} />
           <span>

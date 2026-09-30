@@ -6,20 +6,23 @@ import { getSettings } from './db.js';
 
 const MIME = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.gif': 'image/gif' };
 
-let logoCache = { key: '', uri: '' };
+const logoCache = new Map(); // file -> { mtime, uri }
 
-/** Current logo as a data URI (uploaded logo if set, otherwise the bundled default). */
-export function logoDataUri() {
+/**
+ * Logo as a data URI. Order of preference: the event's own logo, the uploaded default logo in settings,
+ * then the bundled default. Missing files fall through to the next option.
+ */
+export function logoDataUri(eventLogo) {
   const { logo } = getSettings();
-  let file = logo ? path.join(config.uploadDir, path.basename(logo)) : config.defaultLogo;
-  if (!fs.existsSync(file)) file = config.defaultLogo;
-  const stat = fs.statSync(file);
-  const key = `${file}:${stat.mtimeMs}`;
-  if (logoCache.key !== key) {
-    const mime = MIME[path.extname(file).toLowerCase()] || 'image/png';
-    logoCache = { key, uri: `data:${mime};base64,${fs.readFileSync(file).toString('base64')}` };
-  }
-  return logoCache.uri;
+  const candidates = [eventLogo, logo].filter(Boolean).map((f) => path.join(config.uploadDir, path.basename(f)));
+  const file = candidates.find((f) => fs.existsSync(f)) ?? config.defaultLogo;
+  const { mtimeMs } = fs.statSync(file);
+  const hit = logoCache.get(file);
+  if (hit && hit.mtime === mtimeMs) return hit.uri;
+  const mime = MIME[path.extname(file).toLowerCase()] || 'image/png';
+  const uri = `data:${mime};base64,${fs.readFileSync(file).toString('base64')}`;
+  logoCache.set(file, { mtime: mtimeMs, uri });
+  return uri;
 }
 
 const escapeAttr = (s) => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
@@ -28,7 +31,7 @@ const escapeAttr = (s) => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;
  * Render a QR code as SVG with the logo in the middle.
  * Error correction level H tolerates ~30% damage; the logo (plus its white pad) covers well under that.
  */
-export function qrSvg(text, { size = 512, color, withLogo = true } = {}) {
+export function qrSvg(text, { size = 512, color, withLogo = true, eventLogo } = {}) {
   const settings = getSettings();
   const fg = color || settings.qr_color || '#111111';
   const qr = QRCode.create(text, { errorCorrectionLevel: 'H' });
@@ -74,7 +77,7 @@ export function qrSvg(text, { size = 512, color, withLogo = true } = {}) {
     logo =
       `<defs><clipPath id="logoClip"><circle cx="${cx}" cy="${cx}" r="${lr}"/></clipPath></defs>` +
       `<circle cx="${cx}" cy="${cx}" r="${bg}" fill="#fff"/>` +
-      `<image href="${escapeAttr(logoDataUri())}" x="${cx - lr}" y="${cx - lr}" width="${lr * 2}" height="${lr * 2}" preserveAspectRatio="xMidYMid slice" clip-path="url(#logoClip)"/>`;
+      `<image href="${escapeAttr(logoDataUri(eventLogo))}" x="${cx - lr}" y="${cx - lr}" width="${lr * 2}" height="${lr * 2}" preserveAspectRatio="xMidYMid slice" clip-path="url(#logoClip)"/>`;
   }
 
   return (

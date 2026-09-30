@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
-import { assetUrl } from '../api.js';
+import { SEATKO_LOGO } from '../api.js';
 import { ROLE_LABEL } from '../format.js';
 import { useApp, SCAN } from '../state.jsx';
 import { useEffect } from 'react';
@@ -37,14 +37,15 @@ export default function Layout() {
     <div className="shell">
       <header className="topbar">
         <button className="icon-btn" onClick={() => setOpen(!open)} aria-label="Menu">☰</button>
-        <span className="brand-name">{settings?.org_name}</span>
+        <img src={SEATKO_LOGO} alt="" className="brand-logo brand-logo-sm" />
+        <span className="brand-name">Seatko</span>
       </header>
       <aside className={`sidebar ${open ? 'open' : ''}`}>
         <div className="brand">
-          {settings?.logo_url && <img src={assetUrl(settings.logo_url)} alt="" className="brand-logo" />}
+          <img src={SEATKO_LOGO} alt="" className="brand-logo" />
           <div>
-            <div className="brand-name">{settings?.org_name || 'Seatko'}</div>
-            <div className="brand-sub">Ticketing</div>
+            <div className="brand-name">Seatko</div>
+            <div className="brand-sub">{settings?.org_name ? `${settings.org_name} ticketing` : 'Ticketing'}</div>
           </div>
         </div>
         <nav>

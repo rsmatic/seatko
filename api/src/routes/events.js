@@ -113,7 +113,7 @@ r.delete('/:id', requireRole(...MANAGE), h((req, res) => {
     throw bad('This event already has orders. Set its status to Cancelled instead of deleting it.');
   }
   db.prepare('DELETE FROM events WHERE id = ?').run(ev.id);
-  if (ev.poster) fs.rm(uploadPath(ev.poster), { force: true }, () => {});
+  for (const f of [ev.poster, ev.logo]) if (f) fs.rm(uploadPath(f), { force: true }, () => {});
   audit(req, 'delete', 'event', ev.id, ev.title);
   res.json({ ok: true });
 }));
@@ -124,6 +124,25 @@ r.post('/:id/poster', requireRole(...MANAGE), upload.single('poster'), h((req, r
   if (ev.poster) fs.rm(uploadPath(ev.poster), { force: true }, () => {});
   db.prepare("UPDATE events SET poster = ?, updated_at = datetime('now') WHERE id = ?").run(req.file.filename, ev.id);
   audit(req, 'upload_poster', 'event', ev.id);
+  res.json(withSummary(getEvent(ev.id)));
+}));
+
+// Optional event logo: shown in the middle of this event's QR codes and on its tickets
+// instead of the default logo from Branding & settings.
+r.post('/:id/logo', requireRole(...MANAGE), upload.single('logo'), h((req, res) => {
+  const ev = getEvent(req.params.id);
+  if (!req.file) throw bad('Choose an image file to upload');
+  if (ev.logo) fs.rm(uploadPath(ev.logo), { force: true }, () => {});
+  db.prepare("UPDATE events SET logo = ?, updated_at = datetime('now') WHERE id = ?").run(req.file.filename, ev.id);
+  audit(req, 'upload_logo', 'event', ev.id, req.file.originalname);
+  res.json(withSummary(getEvent(ev.id)));
+}));
+
+r.delete('/:id/logo', requireRole(...MANAGE), h((req, res) => {
+  const ev = getEvent(req.params.id);
+  if (ev.logo) fs.rm(uploadPath(ev.logo), { force: true }, () => {});
+  db.prepare("UPDATE events SET logo = NULL, updated_at = datetime('now') WHERE id = ?").run(ev.id);
+  audit(req, 'remove_logo', 'event', ev.id);
   res.json(withSummary(getEvent(ev.id)));
 }));
 
