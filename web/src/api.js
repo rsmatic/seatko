@@ -38,8 +38,8 @@ export async function api(path, { method = 'GET', body, raw = false } = {}) {
     res = await fetch(`${API_BASE}/api${path}`, { method, headers, body: payload });
   } catch {
     throw new Error(API_BASE
-      ? `Can't reach the Seatko server at ${API_BASE}. Check that it is running.`
-      : "Can't reach the Seatko server. No API URL is configured for this site yet.");
+      ? `Can't reach the SeatKo server at ${API_BASE}. Check that it is running.`
+      : "Can't reach the SeatKo server. No API URL is configured for this site yet.");
   }
   if (res.status === 401 && token) {
     setToken(null);
@@ -48,7 +48,7 @@ export async function api(path, { method = 'GET', body, raw = false } = {}) {
   if (raw && res.ok) return res;
   if (!res.ok && !(res.headers.get('content-type') || '').includes('json')) {
     // A static host (e.g. GitHub Pages) answered instead of the API.
-    throw new Error("Can't reach the Seatko server. No API URL is configured for this site yet.");
+    throw new Error("Can't reach the SeatKo server. No API URL is configured for this site yet.");
   }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
@@ -66,5 +66,5 @@ export async function download(path, filename) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-/** The Seatko app's own logo (served from web/public). */
+/** The SeatKo app's own logo (served from web/public). */
 export const SEATKO_LOGO = `${import.meta.env.BASE_URL}seatko.svg`;

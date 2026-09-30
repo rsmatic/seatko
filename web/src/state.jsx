@@ -16,7 +16,7 @@ export function AppProvider({ children }) {
   }, []);
 
   useEffect(() => {
-    api('/settings').then(setSettings).catch(() => setSettings({ org_name: 'Seatko', currency: 'PHP' }));
+    api('/settings').then(setSettings).catch(() => setSettings({ org_name: 'SeatKo', currency: 'PHP' }));
     if (!getToken()) {
       setBooting(false);
       return;

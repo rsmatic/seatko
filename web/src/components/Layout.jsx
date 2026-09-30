@@ -19,7 +19,7 @@ const Icon = ({ name }) => (
 );
 
 export default function Layout() {
-  const { user, logout, can, settings } = useApp();
+  const { user, logout, can } = useApp();
   const [open, setOpen] = useState(false);
   const loc = useLocation();
   useEffect(() => setOpen(false), [loc.pathname]);
@@ -38,14 +38,14 @@ export default function Layout() {
       <header className="topbar">
         <button className="icon-btn" onClick={() => setOpen(!open)} aria-label="Menu">☰</button>
         <img src={SEATKO_LOGO} alt="" className="brand-logo brand-logo-sm" />
-        <span className="brand-name">Seatko</span>
+        <span className="brand-name">SeatKo</span>
       </header>
       <aside className={`sidebar ${open ? 'open' : ''}`}>
         <div className="brand">
           <img src={SEATKO_LOGO} alt="" className="brand-logo" />
           <div>
-            <div className="brand-name">Seatko</div>
-            <div className="brand-sub">{settings?.org_name ? `${settings.org_name} ticketing` : 'Ticketing'}</div>
+            <div className="brand-name">SeatKo</div>
+            <div className="brand-sub">Ticketing Management</div>
           </div>
         </div>
         <nav>

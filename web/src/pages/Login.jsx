@@ -4,7 +4,7 @@ import { SEATKO_LOGO } from '../api.js';
 import { useApp } from '../state.jsx';
 
 export default function Login() {
-  const { user, login, settings } = useApp();
+  const { user, login } = useApp();
   const nav = useNavigate();
   const loc = useLocation();
   const [email, setEmail] = useState('');
@@ -32,8 +32,8 @@ export default function Login() {
     <div className="login-wrap">
       <form className="login-card" onSubmit={submit}>
         <img src={SEATKO_LOGO} alt="" className="login-logo" />
-        <h1>Seatko</h1>
-        <p className="muted">{settings?.org_name ? `Ticketing for ${settings.org_name}` : 'Ticketing management'}</p>
+        <h1>SeatKo</h1>
+        <p className="muted">Ticketing Management</p>
         {error && <div className="alert alert-error">{error}</div>}
         <label className="field">
           <span className="field-label">Email</span>
