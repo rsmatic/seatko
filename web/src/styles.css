@@ -343,3 +343,6 @@ dl.details dd { margin: 0; }
   .ticket-stub::before, .ticket-stub::after { background: #fff; }
   .ticket-wrap .btn-row { display: none; }
 }
+
+.check { display: flex; gap: .6rem; align-items: flex-start; margin-bottom: .9rem; cursor: pointer; }
+.check input { margin-top: .25rem; }

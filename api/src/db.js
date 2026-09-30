@@ -145,6 +145,12 @@ CREATE TABLE IF NOT EXISTS audit_log (
 );
 `);
 
+// Lightweight migrations for databases created before a column existed.
+const hasColumn = (table, col) => db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === col);
+if (!hasColumn('events', 'show_on_website')) {
+  db.exec('ALTER TABLE events ADD COLUMN show_on_website INTEGER NOT NULL DEFAULT 1');
+}
+
 const DEFAULT_SETTINGS = {
   org_name: 'POIMEN',
   org_tagline: 'A band of pastors · Philippines',

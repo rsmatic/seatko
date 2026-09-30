@@ -27,10 +27,13 @@ function publicEvent(ev) {
   };
 }
 
-// Events visible to the public (drafts stay hidden). Optional ?artist= filter.
+const isPublic = (ev) => ev && ev.show_on_website && PUBLIC_STATUSES.includes(ev.status);
+
+// Events visible to the public: not drafts, and not switched off with "Show on website".
+// Optional ?artist= filter.
 r.get('/events', h((req, res) => {
   const rows = db.prepare(`
-    SELECT * FROM events WHERE status IN (${PUBLIC_STATUSES.map(() => '?').join(',')})
+    SELECT * FROM events WHERE status IN (${PUBLIC_STATUSES.map(() => '?').join(',')}) AND show_on_website = 1
       AND (? IS NULL OR artist = ? COLLATE NOCASE) ORDER BY starts_at
   `).all(...PUBLIC_STATUSES, req.query.artist || null, req.query.artist || null);
   res.setHeader('Cache-Control', 'public, max-age=60');
@@ -39,7 +42,7 @@ r.get('/events', h((req, res) => {
 
 r.get('/events/:id', h((req, res) => {
   const ev = db.prepare('SELECT * FROM events WHERE id = ?').get(req.params.id);
-  if (!ev || !PUBLIC_STATUSES.includes(ev.status)) throw notFound('Event');
+  if (!isPublic(ev)) throw notFound('Event');
   res.setHeader('Cache-Control', 'public, max-age=60');
   res.json(publicEvent(ev));
 }));

@@ -29,6 +29,7 @@ function eventFields(body, creating) {
     doors_at: isoDate(body.doors_at, 'Doors open'),
     status: oneOf(body.status, 'Status', STATUSES),
     max_per_order: int(body.max_per_order, 'Max tickets per order', { min: 1, max: 500 }),
+    show_on_website: body.show_on_website === undefined ? undefined : body.show_on_website ? 1 : 0,
   };
 }
 
@@ -52,12 +53,13 @@ r.get('/:id', h((req, res) => {
 r.post('/', requireRole(...MANAGE), h((req, res) => {
   const f = eventFields(req.body, true);
   const { lastInsertRowid } = db.prepare(`
-    INSERT INTO events (title, artist, description, venue, address, starts_at, doors_at, status, max_per_order, created_by)
-    VALUES (@title, @artist, @description, @venue, @address, @starts_at, @doors_at, @status, @max_per_order, @created_by)
+    INSERT INTO events (title, artist, description, venue, address, starts_at, doors_at, status, max_per_order, show_on_website, created_by)
+    VALUES (@title, @artist, @description, @venue, @address, @starts_at, @doors_at, @status, @max_per_order, @show_on_website, @created_by)
   `).run({
     ...f,
     artist: f.artist ?? '', description: f.description ?? '', venue: f.venue ?? '', address: f.address ?? '',
-    doors_at: f.doors_at ?? null, status: f.status ?? 'draft', max_per_order: f.max_per_order ?? 10, created_by: req.user.id,
+    doors_at: f.doors_at ?? null, status: f.status ?? 'draft', max_per_order: f.max_per_order ?? 10,
+    show_on_website: f.show_on_website ?? 1, created_by: req.user.id,
   });
   audit(req, 'create', 'event', lastInsertRowid, f.title);
   res.status(201).json(withSummary(getEvent(lastInsertRowid)));
@@ -76,9 +78,10 @@ r.post('/:id/duplicate', requireRole(...MANAGE), h((req, res) => {
   const ev = getEvent(req.params.id);
   const copy = db.transaction(() => {
     const { lastInsertRowid: newId } = db.prepare(`
-      INSERT INTO events (title, artist, description, venue, address, starts_at, doors_at, status, max_per_order, poster, created_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 'draft', ?, NULL, ?)
-    `).run(`${ev.title} (copy)`, ev.artist, ev.description, ev.venue, ev.address, ev.starts_at, ev.doors_at, ev.max_per_order, req.user.id);
+      INSERT INTO events (title, artist, description, venue, address, starts_at, doors_at, status, max_per_order, show_on_website, poster, created_by)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, NULL, ?)
+    `).run(`${ev.title} (copy)`, ev.artist, ev.description, ev.venue, ev.address, ev.starts_at, ev.doors_at, ev.max_per_order,
+      ev.show_on_website, req.user.id);
     const tierMap = new Map();
     for (const t of db.prepare('SELECT * FROM tiers WHERE event_id = ?').all(ev.id)) {
       const { lastInsertRowid } = db.prepare(`

@@ -40,7 +40,7 @@ export default function Events() {
                   <Badge status={e.status} />
                 </div>
                 <div className="event-body">
-                  <div className="muted small">{e.artist}</div>
+                  <div className="muted small">{e.artist}{!e.show_on_website && <span className="badge badge-closed" style={{ marginLeft: '.4rem' }}>Hidden from website</span>}</div>
                   <div className="row-title">{e.title}</div>
                   <div className="muted small">{dateTime(e.starts_at)}</div>
                   <div className="muted small">{e.venue || 'Venue TBA'}</div>

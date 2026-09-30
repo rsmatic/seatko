@@ -17,6 +17,7 @@ export default function EventForm({ event, onClose, onSaved }) {
     doors_at: event?.doors_at ?? '',
     status: event?.status ?? 'draft',
     max_per_order: event?.max_per_order ?? 10,
+    show_on_website: event ? !!event.show_on_website : true,
   });
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
 
@@ -50,6 +51,13 @@ export default function EventForm({ event, onClose, onSaved }) {
         </Field>
         <Field label="Address" span={2}><input value={f.address} onChange={set('address')} /></Field>
         <Field label="Description" span={2}><textarea rows={4} value={f.description} onChange={set('description')} /></Field>
+        <label className="check span-2">
+          <input type="checkbox" checked={f.show_on_website} onChange={(e) => setF({ ...f, show_on_website: e.target.checked })} />
+          <span>
+            Show on website
+            <span className="field-hint"> The embed on the band site shows prices and availability. Drafts are never shown.</span>
+          </span>
+        </label>
       </form>
     </Modal>
   );

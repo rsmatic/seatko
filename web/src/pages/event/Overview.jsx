@@ -66,6 +66,20 @@ export default function Overview({ event, reloadEvent }) {
                   onClick={() => confirmAction('Cancel this event? Sales stop; existing tickets stay until refunded.') && setStatus('cancelled')}>Cancel event</button>}
                 {event.status === 'cancelled' && <button className="btn" disabled={busy} onClick={() => setStatus('draft')}>Restore as draft</button>}
               </div>
+              <h4>Website embed</h4>
+              <p className="small muted">
+                {!event.show_on_website ? 'Hidden. The band site keeps its placeholder text.'
+                  : event.status === 'draft' ? 'Will appear once the event is put on sale.'
+                  : 'Visible on the band site (updates within a minute).'}
+              </p>
+              <div className="btn-row">
+                <button className="btn" disabled={busy}
+                  onClick={() => run(() => api(`/events/${event.id}`, { method: 'PATCH', body: { show_on_website: !event.show_on_website } }),
+                    event.show_on_website ? 'Hidden from website' : 'Shown on website').then(reloadEvent)}>
+                  {event.show_on_website ? 'Hide from website' : 'Show on website'}
+                </button>
+              </div>
+
               <h4>More</h4>
               <div className="btn-row">
                 <button className="btn" onClick={duplicate} disabled={busy}>Duplicate event</button>
