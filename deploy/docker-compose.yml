@@ -1,0 +1,25 @@
+# Seatko API on the shared EC2 host. Joins orderko's network so its Caddy can reach
+# seatko-api:4000 (see seatko.caddy). Secrets live in api/.env on the server only.
+#   cd ~/seatko && git pull && docker compose -f deploy/docker-compose.yml up -d --build
+name: seatko
+
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: api/Dockerfile
+    container_name: seatko-api
+    restart: unless-stopped
+    env_file: ../api/.env
+    volumes:
+      - seatko-data:/app/api/data
+    networks:
+      - orderko_default
+    mem_limit: 256m
+
+volumes:
+  seatko-data:
+
+networks:
+  orderko_default:
+    external: true

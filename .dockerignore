@@ -1,0 +1,9 @@
+**/node_modules
+.git
+.github
+web/src
+web/dist
+api/data
+api/uploads
+**/.env
+*.pem

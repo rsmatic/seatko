@@ -1,0 +1,11 @@
+# Seatko API site. Installed to ~/eaglemark/caddy/seatko.caddy on the server (the folder
+# orderko's Caddy mounts at /etc/caddy/eaglemark) and imported from the Caddyfile there.
+# Own hostname, so Caddy gets it its own Let's Encrypt certificate.
+seatko.54-227-48-13.sslip.io {
+	encode gzip
+	reverse_proxy seatko-api:4000
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+	}
+}
