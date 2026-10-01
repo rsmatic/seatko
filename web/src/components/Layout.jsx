@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { SEATKO_LOGO } from '../api.js';
 import { ROLE_LABEL } from '../format.js';
 import { useApp, SCAN } from '../state.jsx';
@@ -84,6 +84,7 @@ export default function Layout() {
             </div>
           </NavLink>
           <button className="btn btn-ghost btn-sm" onClick={logout}>Sign out</button>
+          <div className="legal-links small"><Link to="/terms">Terms</Link> · <Link to="/privacy">Privacy</Link></div>
         </div>
       </aside>
       {open && <div className="scrim" onClick={() => setOpen(false)} />}

@@ -370,3 +370,18 @@ dl.details dd { margin: 0; }
 .pay-to { white-space: pre-wrap; background: var(--surface-2); border-radius: 8px; padding: .8rem 1rem; }
 .terms { font-size: 1.05rem; }
 .mt-sm { margin-top: .4rem; }
+
+/* ---------- legal pages ---------- */
+.legal { max-width: 780px; margin: 0 auto; padding: 1.5rem 1rem 4rem; }
+.legal-head { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; margin-bottom: 2rem; }
+.legal-head nav { flex-direction: row; align-items: center; gap: .4rem; }
+.legal-brand { display: flex; align-items: center; gap: .6rem; color: var(--text); font: 600 1.2rem var(--display); letter-spacing: .06em; }
+.legal-brand:hover { text-decoration: none; }
+.legal-brand img { width: 34px; height: 34px; border-radius: 8px; }
+.legal-body { line-height: 1.7; }
+.legal-body h2 { font-size: 1.1rem; margin-top: 2rem; }
+.legal-body ul { padding-left: 1.25rem; }
+.legal-body li { margin-bottom: .4rem; }
+.legal-body hr { border: 0; border-top: 1px solid var(--border); margin: 2rem 0 1rem; }
+.legal-links { color: var(--muted); text-align: center; margin: 1rem 0 0; }
+.login-card .legal-links { margin-bottom: 0; }

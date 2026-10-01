@@ -14,6 +14,7 @@ import Settings from './pages/Settings.jsx';
 import Activity from './pages/Activity.jsx';
 import Profile from './pages/Profile.jsx';
 import Billing from './pages/Billing.jsx';
+import { Privacy, Terms } from './pages/Legal.jsx';
 import PlatformHome from './pages/platform/PlatformHome.jsx';
 import OrgDetail from './pages/platform/OrgDetail.jsx';
 import PlatformPayments from './pages/platform/PlatformPayments.jsx';
@@ -55,6 +56,8 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/t/:code" element={<PublicTicket />} />
+      <Route path="/terms" element={<Terms />} />
+      <Route path="/privacy" element={<Privacy />} />
       <Route element={<Protected><Layout /></Protected>}>
         <Route index element={<Home />} />
         <Route path="profile" element={<Profile />} />
