@@ -1,8 +1,9 @@
 import { Router } from 'express';
-import { db, audit } from '../db.js';
+import { db, audit, getSettings } from '../db.js';
 import { MANAGE, SCAN, SELL, requireRole } from '../auth.js';
 import { eventFor, canAccessEvent, refreshSoldOut } from '../services.js';
 import { chargeTicketFees, refundTicketFees } from '../billing.js';
+import { isEmail, sendMail, ticketEmail } from '../mailer.js';
 import { h, str, int, oneOf, bad, notFound, ticketCode, orderRef, csvEscape, HttpError } from '../util.js';
 
 const r = Router();
@@ -80,6 +81,7 @@ r.post('/events/:id/orders', requireRole(...SELL), h((req, res) => {
   const ev = eventFor(req, req.params.id);
   const buyerName = str(req.body.buyer_name, 'Buyer name', { required: true, max: 200 });
   const buyerEmail = str(req.body.buyer_email, 'Buyer email', { max: 200 }) ?? '';
+  if (buyerEmail && !isEmail(buyerEmail)) throw bad('Buyer email looks invalid');
   const buyerPhone = str(req.body.buyer_phone, 'Buyer phone', { max: 50 }) ?? '';
   const method = oneOf(req.body.payment_method, 'Payment method', PAYMENT_METHODS, { required: true });
   const paymentRef = str(req.body.payment_ref, 'Payment reference', { max: 200 }) ?? '';
@@ -147,6 +149,29 @@ r.get('/events/:id/orders', requireRole(...SELL), h((req, res) => {
 }));
 
 r.get('/orders/:id', requireRole(...SELL), h((req, res) => res.json(loadOrder(req.params.id, req.orgId, req.user))));
+
+// Email the order's tickets (links to their QR pages) to the buyer, or to another address.
+r.post('/orders/:id/email', requireRole(...SELL), h(async (req, res) => {
+  const order = loadOrder(req.params.id, req.orgId, req.user);
+  const to = String(req.body.email ?? order.buyer_email ?? '').trim();
+  if (!isEmail(to)) throw bad('Enter a valid email address');
+  const tickets = order.tickets.filter((t) => t.status !== 'void');
+  if (!tickets.length) throw bad('This order has no valid tickets to send');
+  const event = db.prepare('SELECT * FROM events WHERE id = ?').get(order.event_id);
+  const org = getSettings(req.orgId);
+  const { contact_email: replyTo } = db.prepare('SELECT contact_email FROM organizations WHERE id = ?').get(req.orgId);
+  try {
+    await sendMail({ to, replyTo: isEmail(replyTo) ? replyTo : undefined, ...ticketEmail({ order, tickets, event, org }) });
+  } catch (e) {
+    if (e instanceof HttpError) throw e;
+    console.error('ticket email failed', e);
+    throw new HttpError(502, 'The email could not be sent. Please try again in a moment.');
+  }
+  db.prepare("UPDATE orders SET emailed_at = datetime('now'), emailed_to = ?, buyer_email = CASE WHEN buyer_email = '' THEN ? ELSE buyer_email END WHERE id = ?")
+    .run(to, to, order.id);
+  audit(req, 'email_tickets', 'order', order.id, { to, tickets: tickets.length });
+  res.json(loadOrder(order.id, req.orgId, req.user));
+}));
 
 function releaseTicket(ticket) {
   db.prepare("UPDATE tickets SET status = 'void' WHERE id = ?").run(ticket.id);

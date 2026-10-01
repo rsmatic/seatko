@@ -157,6 +157,11 @@ if (!hasColumn('sections', 'pos_x')) {
   db.exec('ALTER TABLE sections ADD COLUMN pos_y REAL');
   db.exec('ALTER TABLE sections ADD COLUMN angle REAL NOT NULL DEFAULT 0');
 }
+if (!hasColumn('orders', 'emailed_at')) {
+  // Last time the order's tickets were emailed to the buyer, and to which address.
+  db.exec('ALTER TABLE orders ADD COLUMN emailed_at TEXT');
+  db.exec('ALTER TABLE orders ADD COLUMN emailed_to TEXT');
+}
 if (!hasColumn('events', 'logo')) {
   // Optional per-event logo: replaces the default logo on that event's tickets and QR codes.
   db.exec('ALTER TABLE events ADD COLUMN logo TEXT');

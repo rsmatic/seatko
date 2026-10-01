@@ -387,3 +387,6 @@ dl.details dd { margin: 0; }
 .login-card .legal-links { margin-bottom: 0; }
 .event-picks { max-height: 220px; overflow: auto; border: 1px solid var(--border); border-radius: 8px; padding: .6rem .8rem .1rem; margin: .3rem 0 .4rem; }
 .event-picks .check { margin-bottom: .5rem; }
+.email-tickets { margin-top: 1.1rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+.email-tickets .promo { margin: .35rem 0 .3rem; }
+.sent-note { color: var(--ok); }

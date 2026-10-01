@@ -5,11 +5,12 @@ import { useAction, useApp, useLoad, MANAGE } from '../../state.jsx';
 import { money, PAYMENT_LABEL } from '../../format.js';
 import { Field, Loadable, Modal } from '../../components/ui.jsx';
 import SeatMap from '../../components/SeatMap.jsx';
+import EmailTickets, { isEmail } from '../../components/EmailTickets.jsx';
 
 const EMPTY_BUYER = { buyer_name: '', buyer_email: '', buyer_phone: '', payment_method: 'cash', payment_ref: '', notes: '' };
 
 export default function BoxOffice({ event, reloadEvent }) {
-  const { can, settings } = useApp();
+  const { can, settings, toast } = useApp();
   const map = useLoad(`/events/${event.id}/seatmap`);
   const [selected, setSelected] = useState(new Set());
   const [ga, setGa] = useState({});
@@ -19,6 +20,8 @@ export default function BoxOffice({ event, reloadEvent }) {
   const [quote, setQuote] = useState(null);
   const [quoteError, setQuoteError] = useState('');
   const [done, setDone] = useState(null);
+  const [emailIt, setEmailIt] = useState(true);
+  const canEmail = settings?.email_enabled && isEmail(buyer.buyer_email);
   const [run, busy] = useAction();
 
   const gaTiers = event.tiers.filter((t) => t.kind === 'ga' && t.active);
@@ -49,7 +52,16 @@ export default function BoxOffice({ event, reloadEvent }) {
       () => api(`/events/${event.id}/orders`, { method: 'POST', body: { ...cart, ...buyer, promo_code: promo || undefined } }),
       'Tickets issued',
     );
-    setDone(order);
+    let shown = order;
+    if (emailIt && canEmail) {
+      try {
+        shown = await api(`/orders/${order.id}/email`, { method: 'POST', body: { email: buyer.buyer_email.trim() } });
+        toast(`Tickets emailed to ${buyer.buyer_email.trim()}`);
+      } catch (err) {
+        toast(`Tickets issued, but the email failed: ${err.message}`, 'error');
+      }
+    }
+    setDone(shown);
     setSelected(new Set());
     setGa({});
     setBuyer(EMPTY_BUYER);
@@ -127,7 +139,9 @@ export default function BoxOffice({ event, reloadEvent }) {
 
         <Field label="Buyer name"><input value={buyer.buyer_name} onChange={set('buyer_name')} required /></Field>
         <div className="form-grid">
-          <Field label="Email"><input type="email" value={buyer.buyer_email} onChange={set('buyer_email')} /></Field>
+          <Field label="Email" hint={buyer.buyer_email && !isEmail(buyer.buyer_email) ? 'Not a valid email address' : null}>
+            <input type="email" value={buyer.buyer_email} onChange={set('buyer_email')} />
+          </Field>
           <Field label="Phone"><input value={buyer.buyer_phone} onChange={set('buyer_phone')} /></Field>
           <Field label="Payment">
             <select value={buyer.payment_method} onChange={set('payment_method')}>
@@ -137,6 +151,12 @@ export default function BoxOffice({ event, reloadEvent }) {
           <Field label="Payment ref."><input value={buyer.payment_ref} onChange={set('payment_ref')} placeholder="GCash ref no." /></Field>
         </div>
         <Field label="Notes"><input value={buyer.notes} onChange={set('notes')} /></Field>
+        {settings?.email_enabled && (
+          <label className={`check ${canEmail ? '' : 'dim'}`}>
+            <input type="checkbox" checked={emailIt && canEmail} disabled={!canEmail} onChange={(e) => setEmailIt(e.target.checked)} />
+            <span>Email the tickets to the buyer<span className="field-hint"> {canEmail ? `· ${buyer.buyer_email.trim()}` : '· enter a valid email above'}</span></span>
+          </label>
+        )}
         <button className="btn btn-primary btn-block" disabled={!quote || busy}>
           {busy ? 'Issuing…' : quote ? `Issue ${count} ticket${count === 1 ? '' : 's'} · ${money(quote.total_cents)}` : 'Issue tickets'}
         </button>
@@ -147,7 +167,8 @@ export default function BoxOffice({ event, reloadEvent }) {
   );
 }
 
-function OrderDone({ order, v, onClose }) {
+function OrderDone({ order: initial, v, onClose }) {
+  const [order, setOrder] = useState(initial);
   const codes = order.tickets.map((t) => t.code).join(',');
   return (
     <Modal title={`Order ${order.reference}`} onClose={onClose} wide
@@ -162,6 +183,7 @@ function OrderDone({ order, v, onClose }) {
           </Link>
         ))}
       </div>
+      <EmailTickets order={order} onSent={setOrder} />
     </Modal>
   );
 }

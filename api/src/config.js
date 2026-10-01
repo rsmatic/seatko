@@ -19,6 +19,18 @@ export const config = {
     password: process.env.OWNER_PASSWORD || '',
     name: process.env.OWNER_NAME || 'SeatKo Owner',
   },
+  // Public addresses used in emails: where buyers open tickets, and where images are served from.
+  appUrl: (process.env.PUBLIC_APP_URL || 'http://localhost:5173').replace(/\/$/, ''),
+  apiUrl: (process.env.PUBLIC_API_URL || `http://localhost:${process.env.PORT || 4000}`).replace(/\/$/, ''),
+  // Outgoing email (ticket emails). Disabled unless SMTP_HOST and SMTP_USER are set.
+  // With Gmail, MAIL_FROM must be the Gmail address itself; a display name like "SeatKo" is fine.
+  mail: {
+    host: process.env.SMTP_HOST || '',
+    port: Number(process.env.SMTP_PORT || 465),
+    user: process.env.SMTP_USER || '',
+    password: (process.env.SMTP_PASSWORD || '').replace(/\s+/g, ''),
+    from: process.env.MAIL_FROM || '',
+  },
   // Admin of the demo organizer created by `npm run seed`.
   admin: {
     email: process.env.ADMIN_EMAIL || 'admin@seatko.local',

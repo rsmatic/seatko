@@ -5,6 +5,7 @@ import { db, getSettings, audit } from '../db.js';
 import { requireAuth, requireOrg, requireRole } from '../auth.js';
 import { upload } from '../upload.js';
 import { config } from '../config.js';
+import { mailEnabled } from '../mailer.js';
 import { h, str, color, bad } from '../util.js';
 
 const r = Router();
@@ -21,6 +22,7 @@ export function publicSettings(orgId) {
     ticket_footer: s.ticket_footer,
     logo_url: s.logo ? `/uploads/${s.logo}` : '/api/settings/default-logo',
     has_custom_logo: !!s.logo,
+    email_enabled: mailEnabled(),
   };
 }
 

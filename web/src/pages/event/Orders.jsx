@@ -4,6 +4,7 @@ import { api } from '../../api.js';
 import { useAction, useApp, useLoad, MANAGE } from '../../state.jsx';
 import { dateTime, money, PAYMENT_LABEL } from '../../format.js';
 import { Badge, Empty, Loadable, Modal, confirmAction } from '../../components/ui.jsx';
+import EmailTickets from '../../components/EmailTickets.jsx';
 
 export default function Orders({ event, reloadEvent }) {
   const [q, setQ] = useState('');
@@ -75,6 +76,7 @@ function OrderModal({ id, onClose, onChanged }) {
               <dt>Sold by</dt><dd>{o.created_by_name} · {dateTime(o.created_at)}</dd>
               {o.notes && <><dt>Notes</dt><dd>{o.notes}</dd></>}
             </dl>
+            {o.status === 'paid' && <EmailTickets order={o} onSent={(updated) => state.setData(updated)} />}
             <div className="table-wrap">
               <table>
                 <thead><tr><th>Code</th><th>Seat / tier</th><th>Holder</th><th className="num">Price</th><th>Status</th></tr></thead>
