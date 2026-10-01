@@ -238,6 +238,18 @@ if (!hasColumn('users', 'org_id')) {
 if (!hasColumn('events', 'org_id')) db.exec('ALTER TABLE events ADD COLUMN org_id INTEGER REFERENCES organizations(id) ON DELETE CASCADE');
 if (!hasColumn('audit_log', 'org_id')) db.exec('ALTER TABLE audit_log ADD COLUMN org_id INTEGER');
 db.exec('CREATE INDEX IF NOT EXISTS idx_events_org ON events(org_id)');
+
+// Per-user event access: staff with all_events = 0 only see the events listed in user_events.
+// Admins always see every event of their organizer.
+if (!hasColumn('users', 'all_events')) db.exec('ALTER TABLE users ADD COLUMN all_events INTEGER NOT NULL DEFAULT 1');
+db.exec(`
+CREATE TABLE IF NOT EXISTS user_events (
+  user_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+  PRIMARY KEY (user_id, event_id)
+);
+CREATE INDEX IF NOT EXISTS idx_user_events_event ON user_events(event_id);
+`);
 db.exec('CREATE INDEX IF NOT EXISTS idx_users_org ON users(org_id)');
 
 export const DEFAULT_ORG_SETTINGS = {

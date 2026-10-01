@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { db, audit } from '../db.js';
 import { MANAGE, requireRole } from '../auth.js';
-import { getEvent, refreshSoldOut } from '../services.js';
+import { eventFor, refreshSoldOut } from '../services.js';
 import { h, str, int, oneOf, bad, notFound, rowLabel } from '../util.js';
 
 // Mounted at /api/events/:id
@@ -22,7 +22,7 @@ function getSection(eventId, sectionId) {
 }
 
 r.get('/seatmap', h((req, res) => {
-  const ev = getEvent(req.params.id, req.orgId);
+  const ev = eventFor(req, req.params.id);
   res.json({
     sections: db.prepare('SELECT * FROM sections WHERE event_id = ? ORDER BY sort, id').all(ev.id),
     seats: db.prepare(`
@@ -46,7 +46,7 @@ function fillSeats(eventId, sectionId, rows, perRow, tierId) {
 }
 
 r.post('/sections', requireRole(...MANAGE), h((req, res) => {
-  const ev = getEvent(req.params.id, req.orgId);
+  const ev = eventFor(req, req.params.id);
   const name = str(req.body.name, 'Section name', { required: true, max: 100 });
   const rows = int(req.body.rows, 'Rows', { required: true, min: 1, max: 100 });
   const perRow = int(req.body.seats_per_row, 'Seats per row', { required: true, min: 1, max: 200 });
@@ -65,7 +65,7 @@ r.post('/sections', requireRole(...MANAGE), h((req, res) => {
 }));
 
 r.patch('/sections/:sectionId', requireRole(...MANAGE), h((req, res) => {
-  const ev = getEvent(req.params.id, req.orgId);
+  const ev = eventFor(req, req.params.id);
   const sec = getSection(ev.id, req.params.sectionId);
   const name = str(req.body.name, 'Section name', { max: 100 });
   const rows = int(req.body.rows, 'Rows', { min: 1, max: 100 }) ?? sec.rows;
@@ -94,7 +94,7 @@ r.patch('/sections/:sectionId', requireRole(...MANAGE), h((req, res) => {
 }));
 
 r.delete('/sections/:sectionId', requireRole(...MANAGE), h((req, res) => {
-  const ev = getEvent(req.params.id, req.orgId);
+  const ev = eventFor(req, req.params.id);
   const sec = getSection(ev.id, req.params.sectionId);
   if (db.prepare("SELECT 1 FROM seats WHERE section_id = ? AND status = 'sold'").get(sec.id)) {
     throw bad('This section has sold seats and cannot be deleted');
@@ -108,7 +108,7 @@ r.delete('/sections/:sectionId', requireRole(...MANAGE), h((req, res) => {
 // Save the seat-plan layout: where each section sits relative to the stage, and its rotation.
 // pos_x/pos_y = null puts a section back into the automatic row.
 r.put('/layout', requireRole(...MANAGE), h((req, res) => {
-  const ev = getEvent(req.params.id, req.orgId);
+  const ev = eventFor(req, req.params.id);
   const items = Array.isArray(req.body.sections) ? req.body.sections : [];
   const num = (v, field, min, max) => {
     if (v === null || v === undefined) return null;
@@ -130,7 +130,7 @@ r.put('/layout', requireRole(...MANAGE), h((req, res) => {
 
 // Bulk seat operations: block / unblock / assign tier. Sold seats are never touched.
 r.post('/seats/bulk', requireRole(...MANAGE), h((req, res) => {
-  const ev = getEvent(req.params.id, req.orgId);
+  const ev = eventFor(req, req.params.id);
   const action = oneOf(req.body.action, 'Action', ['block', 'unblock', 'assign_tier'], { required: true });
   const ids = Array.isArray(req.body.seat_ids) ? req.body.seat_ids.map(Number).filter(Number.isInteger) : [];
   if (!ids.length) throw bad('Select at least one seat');

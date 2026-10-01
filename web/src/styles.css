@@ -385,3 +385,5 @@ dl.details dd { margin: 0; }
 .legal-body hr { border: 0; border-top: 1px solid var(--border); margin: 2rem 0 1rem; }
 .legal-links { color: var(--muted); text-align: center; margin: 1rem 0 0; }
 .login-card .legal-links { margin-bottom: 0; }
+.event-picks { max-height: 220px; overflow: auto; border: 1px solid var(--border); border-radius: 8px; padding: .6rem .8rem .1rem; margin: .3rem 0 .4rem; }
+.event-picks .check { margin-bottom: .5rem; }

@@ -47,3 +47,20 @@ export function refreshSoldOut(eventId) {
   const next = tiers.length && remaining === 0 ? 'sold_out' : 'on_sale';
   if (next !== ev.status) db.prepare("UPDATE events SET status = ?, updated_at = datetime('now') WHERE id = ?").run(next, eventId);
 }
+
+// ---------- per-user event access ----------
+
+/** Admins (and the SeatKo owner) see every event; other staff may be limited to assigned events. */
+export const seesAllEvents = (user) => !!(user.is_superadmin || user.role === 'admin' || user.all_events);
+
+export function canAccessEvent(user, eventId) {
+  return seesAllEvents(user) || !!db.prepare('SELECT 1 FROM user_events WHERE user_id = ? AND event_id = ?').get(user.id, eventId);
+}
+
+/** Load an event the requesting user may work on (same organizer, and assigned to them if restricted). */
+export function eventFor(req, id) {
+  const ev = getEvent(id, req.orgId);
+  if (!canAccessEvent(req.user, ev.id)) throw notFound('Event');
+  return ev;
+}
+

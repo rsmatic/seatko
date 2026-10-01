@@ -1,42 +1,44 @@
 import { Router } from 'express';
 import { db } from '../db.js';
 import { MANAGE, requireRole } from '../auth.js';
-import { getEvent, eventSummary, tierSummary } from '../services.js';
+import { eventFor, seesAllEvents, eventSummary, tierSummary } from '../services.js';
 import { h, int } from '../util.js';
 
 const r = Router();
 
 r.get('/stats/overview', (req, res) => {
-  const org = { org: req.orgId };
+  // Events this user may see: the whole organizer, or only their assigned events.
+  const org = { org: req.orgId, all: seesAllEvents(req.user) ? 1 : 0, uid: req.user.id };
+  const MINE = '(SELECT id FROM events WHERE org_id = @org AND (@all = 1 OR id IN (SELECT event_id FROM user_events WHERE user_id = @uid)))';
   const totals = db.prepare(`
     SELECT
-      (SELECT COALESCE(SUM(total_cents), 0) FROM orders WHERE status = 'paid' AND event_id IN (SELECT id FROM events WHERE org_id = @org)) AS revenue_cents,
-      (SELECT COUNT(*) FROM tickets WHERE status != 'void' AND event_id IN (SELECT id FROM events WHERE org_id = @org)) AS tickets_sold,
-      (SELECT COUNT(*) FROM tickets WHERE status = 'used' AND event_id IN (SELECT id FROM events WHERE org_id = @org)) AS checked_in,
-      (SELECT COUNT(*) FROM orders WHERE status = 'paid' AND event_id IN (SELECT id FROM events WHERE org_id = @org)) AS orders,
-      (SELECT COUNT(*) FROM events WHERE status IN ('on_sale','sold_out') AND org_id = @org) AS events_on_sale
+      (SELECT COALESCE(SUM(total_cents), 0) FROM orders WHERE status = 'paid' AND event_id IN ${MINE}) AS revenue_cents,
+      (SELECT COUNT(*) FROM tickets WHERE status != 'void' AND event_id IN ${MINE}) AS tickets_sold,
+      (SELECT COUNT(*) FROM tickets WHERE status = 'used' AND event_id IN ${MINE}) AS checked_in,
+      (SELECT COUNT(*) FROM orders WHERE status = 'paid' AND event_id IN ${MINE}) AS orders,
+      (SELECT COUNT(*) FROM events WHERE status IN ('on_sale','sold_out') AND id IN ${MINE}) AS events_on_sale
   `).get(org);
   const upcoming = db.prepare(`
-    SELECT * FROM events WHERE org_id = @org AND status NOT IN ('cancelled','closed') ORDER BY starts_at ASC LIMIT 6
+    SELECT * FROM events WHERE id IN ${MINE} AND status NOT IN ('cancelled','closed') ORDER BY starts_at ASC LIMIT 6
   `).all(org).map((e) => ({ ...e, summary: eventSummary(e.id) }));
   const daily = db.prepare(`
     SELECT date(o.created_at, 'localtime') AS day, SUM(o.total_cents) AS revenue_cents,
            SUM((SELECT COUNT(*) FROM tickets k WHERE k.order_id = o.id)) AS tickets
-    FROM orders o WHERE o.status = 'paid' AND o.created_at >= datetime('now', '-30 days') AND o.event_id IN (SELECT id FROM events WHERE org_id = @org)
+    FROM orders o WHERE o.status = 'paid' AND o.created_at >= datetime('now', '-30 days') AND o.event_id IN ${MINE}
     GROUP BY day ORDER BY day
   `).all(org);
   const recent = db.prepare(`
     SELECT o.*, e.title AS event_title, u.name AS created_by_name,
       (SELECT COUNT(*) FROM tickets k WHERE k.order_id = o.id) AS ticket_count
     FROM orders o JOIN events e ON e.id = o.event_id LEFT JOIN users u ON u.id = o.created_by
-    WHERE e.org_id = @org
+    WHERE e.id IN ${MINE}
     ORDER BY o.id DESC LIMIT 8
   `).all(org);
   res.json({ totals, upcoming, daily, recent });
 });
 
 r.get('/events/:id/stats', requireRole(...MANAGE), h((req, res) => {
-  const ev = getEvent(req.params.id, req.orgId);
+  const ev = eventFor(req, req.params.id);
   res.json({
     summary: eventSummary(ev.id),
     tiers: tierSummary(ev.id),
