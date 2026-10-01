@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import { api, getToken, setToken } from './api.js';
+import { api, getActiveOrg, getToken, setActiveOrg, setToken } from './api.js';
 import { setCurrency } from './format.js';
 
 const AppContext = createContext(null);
@@ -8,6 +8,8 @@ export function AppProvider({ children }) {
   const [user, setUser] = useState(null);
   const [booting, setBooting] = useState(true);
   const [settings, setSettingsState] = useState(null);
+  // The organizer being worked on: the staff member's own, or the one the SeatKo owner opened.
+  const [ownerOrg, setOwnerOrg] = useState(getActiveOrg);
   const [toasts, setToasts] = useState([]);
 
   const setSettings = useCallback((s) => {
@@ -16,13 +18,12 @@ export function AppProvider({ children }) {
   }, []);
 
   useEffect(() => {
-    api('/settings').then(setSettings).catch(() => setSettings({ org_name: 'SeatKo', currency: 'PHP' }));
     if (!getToken()) {
       setBooting(false);
       return;
     }
     api('/auth/me').then(setUser).catch(() => setToken(null)).finally(() => setBooting(false));
-  }, [setSettings]);
+  }, []);
 
   useEffect(() => {
     const onLogout = () => setUser(null);
@@ -30,16 +31,34 @@ export function AppProvider({ children }) {
     return () => window.removeEventListener('seatko:logout', onLogout);
   }, []);
 
+  const org = user ? (user.is_superadmin ? ownerOrg : user.org) : null;
+
+  // Organizer branding/settings, reloaded whenever the active organizer changes.
+  useEffect(() => {
+    setSettingsState(null);
+    if (!org) return;
+    api('/settings').then(setSettings).catch(() => setSettings({ org_name: org.name, currency: 'PHP' }));
+  }, [org?.id, setSettings]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const login = async (email, password) => {
     const { token, user: u } = await api('/auth/login', { method: 'POST', body: { email, password } });
     setToken(token);
+    if (!u.is_superadmin) { setActiveOrg(null); setOwnerOrg(null); }
     setUser(u);
     return u;
   };
 
   const logout = () => {
     setToken(null);
+    setActiveOrg(null);
+    setOwnerOrg(null);
     setUser(null);
+  };
+
+  /** Owner only: open an organizer's workspace (or pass null to go back to the platform). */
+  const openOrg = (o) => {
+    setActiveOrg(o);
+    setOwnerOrg(o ? { id: o.id, name: o.name } : null);
   };
 
   const toast = useCallback((message, kind = 'ok') => {
@@ -48,10 +67,12 @@ export function AppProvider({ children }) {
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), kind === 'error' ? 6000 : 3500);
   }, []);
 
-  const can = (...roles) => !!user && roles.includes(user.role);
+  // The owner has every role inside an organizer they opened.
+  const can = (...roles) => !!user && !!org && (user.is_superadmin || roles.includes(user.role));
+  const isOwner = !!user?.is_superadmin;
 
   return (
-    <AppContext.Provider value={{ user, booting, login, logout, can, settings, setSettings, toast }}>
+    <AppContext.Provider value={{ user, booting, login, logout, can, isOwner, org, openOrg, settings, setSettings, toast }}>
       {children}
       <div className="toasts" role="status" aria-live="polite">
         {toasts.map((t) => (

@@ -1,18 +1,33 @@
-// Seeds a demo POIMEN concert with pricing tiers, a seat map and a few staff accounts.
+// Seeds a demo organizer (POIMEN) with a concert, pricing tiers, a seat map and staff accounts.
 // Safe to re-run: skips anything that already exists.
 import bcrypt from 'bcryptjs';
-import { db } from './db.js';
+import fs from 'node:fs';
+import path from 'node:path';
+import { config } from './config.js';
+import { db, initOrgSettings } from './db.js';
 import { rowLabel } from './util.js';
 
+const ORG = 'POIMEN';
+let orgId = db.prepare('SELECT id FROM organizations WHERE name = ?').get(ORG)?.id;
+if (!orgId) {
+  orgId = db.prepare("INSERT INTO organizations (name, billing_model, fee_per_ticket_cents, free_tickets_per_event) VALUES (?, 'per_ticket', 1000, 50)")
+    .run(ORG).lastInsertRowid;
+  const logo = `org-${orgId}-logo.jpg`;
+  fs.copyFileSync(path.join(config.root, 'assets/poimen-logo.jpg'), path.join(config.uploadDir, logo));
+  initOrgSettings(orgId, { org_name: ORG, org_tagline: 'A band of pastors · Philippines', logo });
+  console.log(`organizer "${ORG}" created (₱10/ticket after 50 free per event)`);
+}
+
 const staff = [
+  [config.admin.name, config.admin.email, 'admin', config.admin.password],
   ['Maria Manager', 'manager@seatko.local', 'manager'],
   ['Carlo Cashier', 'cashier@seatko.local', 'cashier'],
   ['Sam Scanner', 'scanner@seatko.local', 'scanner'],
 ];
-for (const [name, email, role] of staff) {
+for (const [name, email, role, password = 'password123'] of staff) {
   if (!db.prepare('SELECT 1 FROM users WHERE email = ?').get(email)) {
-    db.prepare('INSERT INTO users (name, email, password_hash, role) VALUES (?, ?, ?, ?)').run(name, email, bcrypt.hashSync('password123', 10), role);
-    console.log(`user  ${email} / password123 (${role})`);
+    db.prepare('INSERT INTO users (org_id, name, email, password_hash, role) VALUES (?, ?, ?, ?, ?)').run(orgId, name, email, bcrypt.hashSync(password, 10), role);
+    console.log(`user  ${email} / ${password} (${role})`);
   }
 }
 
@@ -24,9 +39,10 @@ if (db.prepare('SELECT 1 FROM events WHERE title = ?').get(TITLE)) {
 
 db.transaction(() => {
   const { lastInsertRowid: eventId } = db.prepare(`
-    INSERT INTO events (title, artist, description, venue, address, starts_at, doors_at, status, max_per_order)
-    VALUES (?, ?, ?, ?, ?, ?, ?, 'on_sale', 10)
+    INSERT INTO events (org_id, title, artist, description, venue, address, starts_at, doors_at, status, max_per_order)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'on_sale', 10)
   `).run(
+    orgId,
     TITLE,
     'POIMEN',
     'A night of worship with POIMEN, a band of pastors from different congregations across the Philippines. "Shepherds who lead with the Word, and with song."',

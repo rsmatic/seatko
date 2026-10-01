@@ -12,6 +12,8 @@ r.post('/login', h((req, res) => {
   const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
   if (!user || !bcrypt.compareSync(password, user.password_hash)) throw new HttpError(401, 'Invalid email or password');
   if (!user.active) throw new HttpError(403, 'This account has been deactivated');
+  const org = user.org_id && db.prepare('SELECT status FROM organizations WHERE id = ?').get(user.org_id);
+  if (org && org.status !== 'active') throw new HttpError(403, 'This organizer account is suspended. Please contact SeatKo.');
   db.prepare("UPDATE users SET last_login_at = datetime('now') WHERE id = ?").run(user.id);
   req.user = user;
   audit(req, 'login', 'user', user.id);

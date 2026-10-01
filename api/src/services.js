@@ -1,9 +1,13 @@
 import { db } from './db.js';
 import { notFound } from './util.js';
 
-export function getEvent(id) {
+/**
+ * Load an event. Routes must pass the request's organization so one organizer can never reach
+ * another's events; internal callers that already hold a checked event may omit it.
+ */
+export function getEvent(id, orgId) {
   const ev = db.prepare('SELECT * FROM events WHERE id = ?').get(id);
-  if (!ev) throw notFound('Event');
+  if (!ev || (orgId !== undefined && ev.org_id !== orgId)) throw notFound('Event');
   return ev;
 }
 

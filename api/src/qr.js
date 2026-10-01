@@ -9,11 +9,11 @@ const MIME = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
 const logoCache = new Map(); // file -> { mtime, uri }
 
 /**
- * Logo as a data URI. Order of preference: the event's own logo, the uploaded default logo in settings,
- * then the bundled default. Missing files fall through to the next option.
+ * Logo as a data URI. Order of preference: the event's own logo, the organizer's logo,
+ * then the bundled SeatKo logo. Missing files fall through to the next option.
  */
-export function logoDataUri(eventLogo) {
-  const { logo } = getSettings();
+export function logoDataUri(orgId, eventLogo) {
+  const { logo } = orgId ? getSettings(orgId) : {};
   const candidates = [eventLogo, logo].filter(Boolean).map((f) => path.join(config.uploadDir, path.basename(f)));
   const file = candidates.find((f) => fs.existsSync(f)) ?? config.defaultLogo;
   const { mtimeMs } = fs.statSync(file);
@@ -31,8 +31,8 @@ const escapeAttr = (s) => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;
  * Render a QR code as SVG with the logo in the middle.
  * Error correction level H tolerates ~30% damage; the logo (plus its white pad) covers well under that.
  */
-export function qrSvg(text, { size = 512, color, withLogo = true, eventLogo } = {}) {
-  const settings = getSettings();
+export function qrSvg(text, { size = 512, color, withLogo = true, orgId, eventLogo } = {}) {
+  const settings = orgId ? getSettings(orgId) : {};
   const fg = color || settings.qr_color || '#111111';
   const qr = QRCode.create(text, { errorCorrectionLevel: 'H' });
   const n = qr.modules.size;
@@ -77,7 +77,7 @@ export function qrSvg(text, { size = 512, color, withLogo = true, eventLogo } = 
     logo =
       `<defs><clipPath id="logoClip"><circle cx="${cx}" cy="${cx}" r="${lr}"/></clipPath></defs>` +
       `<circle cx="${cx}" cy="${cx}" r="${bg}" fill="#fff"/>` +
-      `<image href="${escapeAttr(logoDataUri(eventLogo))}" x="${cx - lr}" y="${cx - lr}" width="${lr * 2}" height="${lr * 2}" preserveAspectRatio="xMidYMid slice" clip-path="url(#logoClip)"/>`;
+      `<image href="${escapeAttr(logoDataUri(orgId, eventLogo))}" x="${cx - lr}" y="${cx - lr}" width="${lr * 2}" height="${lr * 2}" preserveAspectRatio="xMidYMid slice" clip-path="url(#logoClip)"/>`;
   }
 
   return (

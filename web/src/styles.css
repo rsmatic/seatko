@@ -358,3 +358,15 @@ dl.details dd { margin: 0; }
 .logo-pick .field-hint { display: block; margin-top: .4rem; }
 .logo-default { opacity: .45; filter: grayscale(1); }
 .logo-thumb-sm { width: 40px; height: 40px; }
+
+/* ---------- organizers (SaaS) ---------- */
+.org-chip { margin: -.5rem .25rem 1rem; padding: .55rem .7rem; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); }
+.org-chip-owner { border-color: #5a4520; background: #261e0f; }
+.org-chip-name { font-weight: 600; overflow-wrap: anywhere; }
+.nav-heading { font-size: .7rem; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); padding: 1rem .7rem .35rem; }
+.amount-pos { color: var(--warn); }
+.amount-neg { color: var(--ok); }
+.proof-thumb { max-width: 100%; max-height: 420px; border-radius: 8px; border: 1px solid var(--border); background: #fff; }
+.pay-to { white-space: pre-wrap; background: var(--surface-2); border-radius: 8px; padding: .8rem 1rem; }
+.terms { font-size: 1.05rem; }
+.mt-sm { margin-top: .4rem; }

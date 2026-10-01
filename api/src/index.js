@@ -5,7 +5,7 @@ import path from 'node:path';
 import multer from 'multer';
 import { config } from './config.js';
 import './db.js';
-import { requireAuth } from './auth.js';
+import { requireAuth, requireOrg, requireSuper } from './auth.js';
 import authRoutes from './routes/auth.js';
 import userRoutes from './routes/users.js';
 import settingsRoutes from './routes/settings.js';
@@ -14,6 +14,8 @@ import seatingRoutes from './routes/seating.js';
 import salesRoutes from './routes/sales.js';
 import statsRoutes from './routes/stats.js';
 import publicRoutes from './routes/public.js';
+import billingRoutes from './routes/billing.js';
+import platformRoutes from './routes/platform.js';
 
 const app = express();
 app.disable('x-powered-by');
@@ -39,6 +41,11 @@ app.use('/api/settings', settingsRoutes);
 app.use('/api/public', publicRoutes);
 
 app.use('/api', requireAuth);
+// SeatKo owner only.
+app.use('/api/platform', requireSuper, platformRoutes);
+// Everything below acts inside one organizer (the user's own, or the one the owner opened).
+app.use('/api', requireOrg);
+app.use('/api/billing', billingRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/events/:id', seatingRoutes);

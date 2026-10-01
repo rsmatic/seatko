@@ -20,6 +20,26 @@ export function setToken(token) {
   }
 }
 
+// The organizer the SeatKo owner is currently viewing (sent as X-Org-Id). Staff never need it.
+const ORG_KEY = 'seatko_org';
+
+export function getActiveOrg() {
+  try {
+    return JSON.parse(localStorage.getItem(ORG_KEY) || 'null');
+  } catch {
+    return null;
+  }
+}
+
+export function setActiveOrg(org) {
+  try {
+    if (org) localStorage.setItem(ORG_KEY, JSON.stringify({ id: org.id, name: org.name }));
+    else localStorage.removeItem(ORG_KEY);
+  } catch {
+    /* storage unavailable */
+  }
+}
+
 /** Turn an API-relative path (/uploads/x.png, /api/...) into a full URL. */
 export const assetUrl = (path) => (path && !/^https?:/.test(path) ? `${API_BASE}${path}` : path);
 export const qrUrl = (code, v = '') => `${API_BASE}/api/public/qr/${code}.svg${v ? `?v=${v}` : ''}`;
@@ -28,6 +48,8 @@ export async function api(path, { method = 'GET', body, raw = false } = {}) {
   const headers = {};
   const token = getToken();
   if (token) headers.Authorization = `Bearer ${token}`;
+  const org = getActiveOrg();
+  if (org) headers['X-Org-Id'] = String(org.id);
   let payload = body;
   if (body !== undefined && !(body instanceof FormData)) {
     headers['Content-Type'] = 'application/json';

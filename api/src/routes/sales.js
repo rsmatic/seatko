@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { db, audit } from '../db.js';
 import { MANAGE, SCAN, SELL, requireRole } from '../auth.js';
 import { getEvent, refreshSoldOut } from '../services.js';
+import { chargeTicketFees, refundTicketFees } from '../billing.js';
 import { h, str, int, oneOf, bad, notFound, ticketCode, orderRef, csvEscape, HttpError } from '../util.js';
 
 const r = Router();
@@ -70,13 +71,13 @@ function assertSellable(ev, method) {
 }
 
 r.post('/events/:id/quote', requireRole(...SELL), h((req, res) => {
-  const ev = getEvent(req.params.id);
+  const ev = getEvent(req.params.id, req.orgId);
   const q = priceCart(ev, req.body, req.user);
   res.json({ ...q, promo: q.promo && { code: q.promo.code, kind: q.promo.kind, value: q.promo.value } });
 }));
 
 r.post('/events/:id/orders', requireRole(...SELL), h((req, res) => {
-  const ev = getEvent(req.params.id);
+  const ev = getEvent(req.params.id, req.orgId);
   const buyerName = str(req.body.buyer_name, 'Buyer name', { required: true, max: 200 });
   const buyerEmail = str(req.body.buyer_email, 'Buyer email', { max: 200 }) ?? '';
   const buyerPhone = str(req.body.buyer_phone, 'Buyer phone', { max: 50 }) ?? '';
@@ -112,28 +113,29 @@ r.post('/events/:id/orders', requireRole(...SELL), h((req, res) => {
       insertTicket.run(code, lastInsertRowid, ev.id, item.tier_id, item.seat_id, item.tier_name, item.seat_label, item.price_cents, holder);
     });
     if (cart.promo) db.prepare('UPDATE promo_codes SET used_count = used_count + 1 WHERE id = ?').run(cart.promo.id);
+    chargeTicketFees(req.org, { id: lastInsertRowid, event_id: ev.id, reference: ref, payment_method: method, total_cents: cart.total_cents });
     return lastInsertRowid;
   })();
 
   refreshSoldOut(ev.id);
   audit(req, 'sell', 'order', orderId, { event: ev.id });
-  res.status(201).json(loadOrder(orderId));
+  res.status(201).json(loadOrder(orderId, req.orgId));
 }));
 
-function loadOrder(id) {
+function loadOrder(id, orgId) {
   const order = db.prepare(`
     SELECT o.*, u.name AS created_by_name, p.code AS promo_code, e.title AS event_title
     FROM orders o LEFT JOIN users u ON u.id = o.created_by LEFT JOIN promo_codes p ON p.id = o.promo_code_id
     JOIN events e ON e.id = o.event_id
-    WHERE o.id = ?
-  `).get(id);
+    WHERE o.id = ? AND e.org_id = ?
+  `).get(id, orgId);
   if (!order) throw notFound('Order');
   order.tickets = db.prepare('SELECT * FROM tickets WHERE order_id = ? ORDER BY id').all(id);
   return order;
 }
 
 r.get('/events/:id/orders', requireRole(...SELL), h((req, res) => {
-  const ev = getEvent(req.params.id);
+  const ev = getEvent(req.params.id, req.orgId);
   const q = req.query.q ? `%${req.query.q}%` : null;
   res.json(db.prepare(`
     SELECT o.*, u.name AS created_by_name,
@@ -144,7 +146,7 @@ r.get('/events/:id/orders', requireRole(...SELL), h((req, res) => {
   `).all(ev.id, q, q, q, q, q));
 }));
 
-r.get('/orders/:id', requireRole(...SELL), h((req, res) => res.json(loadOrder(req.params.id))));
+r.get('/orders/:id', requireRole(...SELL), h((req, res) => res.json(loadOrder(req.params.id, req.orgId))));
 
 function releaseTicket(ticket) {
   db.prepare("UPDATE tickets SET status = 'void' WHERE id = ?").run(ticket.id);
@@ -152,16 +154,17 @@ function releaseTicket(ticket) {
 }
 
 r.post('/orders/:id/refund', requireRole(...MANAGE), h((req, res) => {
-  const order = loadOrder(req.params.id);
+  const order = loadOrder(req.params.id, req.orgId);
   if (order.status === 'refunded') throw bad('Order is already refunded');
   db.transaction(() => {
     db.prepare("UPDATE orders SET status = 'refunded' WHERE id = ?").run(order.id);
     for (const t of order.tickets) if (t.status !== 'void') releaseTicket(t);
     if (order.promo_code_id) db.prepare('UPDATE promo_codes SET used_count = MAX(0, used_count - 1) WHERE id = ?').run(order.promo_code_id);
+    refundTicketFees(req.orgId, order);
   })();
   refreshSoldOut(order.event_id);
   audit(req, 'refund', 'order', order.id, { reference: order.reference, total_cents: order.total_cents, reason: req.body.reason ?? '' });
-  res.json(loadOrder(order.id));
+  res.json(loadOrder(order.id, req.orgId));
 }));
 
 // ---------- tickets ----------
@@ -173,6 +176,15 @@ const TICKET_SELECT = `
   LEFT JOIN users u ON u.id = k.checked_in_by LEFT JOIN tiers t ON t.id = k.tier_id
 `;
 
+const IN_ORG = 'k.event_id IN (SELECT id FROM events WHERE org_id = ?)';
+
+/** A ticket by id, only if it belongs to the organization. */
+function orgTicket(id, orgId) {
+  const t = db.prepare('SELECT * FROM tickets WHERE id = ? AND event_id IN (SELECT id FROM events WHERE org_id = ?)').get(id, orgId);
+  if (!t) throw notFound('Ticket');
+  return t;
+}
+
 function ticketRows(eventId, { q, status }) {
   const like = q ? `%${q}%` : null;
   return db.prepare(`${TICKET_SELECT}
@@ -183,12 +195,12 @@ function ticketRows(eventId, { q, status }) {
 }
 
 r.get('/events/:id/tickets', h((req, res) => {
-  const ev = getEvent(req.params.id);
+  const ev = getEvent(req.params.id, req.orgId);
   res.json(ticketRows(ev.id, req.query).slice(0, 1000));
 }));
 
 r.get('/events/:id/tickets.csv', requireRole(...MANAGE), h((req, res) => {
-  const ev = getEvent(req.params.id);
+  const ev = getEvent(req.params.id, req.orgId);
   const cols = ['code', 'status', 'tier_name', 'seat_label', 'price_cents', 'holder_name', 'order_reference', 'buyer_name',
     'buyer_email', 'buyer_phone', 'payment_method', 'created_at', 'checked_in_at', 'checked_in_by_name'];
   const lines = [cols.join(',')];
@@ -202,14 +214,13 @@ r.get('/events/:id/tickets.csv', requireRole(...MANAGE), h((req, res) => {
 }));
 
 r.get('/tickets/:code', h((req, res) => {
-  const t = db.prepare(`${TICKET_SELECT} WHERE k.code = ?`).get(req.params.code.toUpperCase());
+  const t = db.prepare(`${TICKET_SELECT} WHERE k.code = ? AND ${IN_ORG}`).get(req.params.code.toUpperCase(), req.orgId);
   if (!t) throw notFound('Ticket');
   res.json(t);
 }));
 
 r.patch('/tickets/:id', requireRole(...SELL), h((req, res) => {
-  const t = db.prepare('SELECT * FROM tickets WHERE id = ?').get(req.params.id);
-  if (!t) throw notFound('Ticket');
+  const t = orgTicket(req.params.id, req.orgId);
   const holder = str(req.body.holder_name, 'Holder name', { required: true, max: 200 });
   db.prepare('UPDATE tickets SET holder_name = ? WHERE id = ?').run(holder, t.id);
   audit(req, 'rename', 'ticket', t.id, { from: t.holder_name, to: holder });
@@ -217,8 +228,7 @@ r.patch('/tickets/:id', requireRole(...SELL), h((req, res) => {
 }));
 
 r.post('/tickets/:id/void', requireRole(...MANAGE), h((req, res) => {
-  const t = db.prepare('SELECT * FROM tickets WHERE id = ?').get(req.params.id);
-  if (!t) throw notFound('Ticket');
+  const t = orgTicket(req.params.id, req.orgId);
   if (t.status === 'void') throw bad('Ticket is already void');
   db.transaction(() => releaseTicket(t))();
   refreshSoldOut(t.event_id);
@@ -227,8 +237,7 @@ r.post('/tickets/:id/void', requireRole(...MANAGE), h((req, res) => {
 }));
 
 r.post('/tickets/:id/undo-checkin', requireRole(...MANAGE), h((req, res) => {
-  const t = db.prepare('SELECT * FROM tickets WHERE id = ?').get(req.params.id);
-  if (!t) throw notFound('Ticket');
+  const t = orgTicket(req.params.id, req.orgId);
   if (t.status !== 'used') throw bad('Ticket has not been checked in');
   db.prepare("UPDATE tickets SET status = 'valid', checked_in_at = NULL, checked_in_by = NULL WHERE id = ?").run(t.id);
   audit(req, 'undo_checkin', 'ticket', t.id, t.code);
@@ -246,8 +255,9 @@ function extractCode(raw) {
 
 r.post('/checkin', requireRole(...SCAN), h((req, res) => {
   const code = extractCode(req.body.code);
-  const eventId = int(req.body.event_id, 'Event', { required: true });
-  const t = db.prepare(`${TICKET_SELECT} WHERE k.code = ?`).get(code);
+  const eventId = getEvent(int(req.body.event_id, 'Event', { required: true }), req.orgId).id;
+  // Tickets of other organizers are reported as unknown.
+  const t = db.prepare(`${TICKET_SELECT} WHERE k.code = ? AND ${IN_ORG}`).get(code, req.orgId);
   if (!t) return res.json({ result: 'not_found', message: 'No ticket with this code', code });
   if (t.event_id !== eventId) {
     const other = db.prepare('SELECT title FROM events WHERE id = ?').get(t.event_id);
@@ -266,7 +276,7 @@ r.post('/checkin', requireRole(...SCAN), h((req, res) => {
 }));
 
 r.get('/events/:id/checkins', requireRole(...SCAN), h((req, res) => {
-  const ev = getEvent(req.params.id);
+  const ev = getEvent(req.params.id, req.orgId);
   res.json(db.prepare(`${TICKET_SELECT} WHERE k.event_id = ? AND k.status = 'used' ORDER BY k.checked_in_at DESC LIMIT 50`).all(ev.id));
 }));
 

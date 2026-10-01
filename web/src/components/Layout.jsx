@@ -1,11 +1,13 @@
 import { useState } from 'react';
-import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { SEATKO_LOGO } from '../api.js';
 import { ROLE_LABEL } from '../format.js';
 import { useApp, SCAN } from '../state.jsx';
 import { useEffect } from 'react';
 
 const ICONS = {
+  org: 'M12 7V3H2v18h20V7H12zM6 19H4v-2h2v2zm0-4H4v-2h2v2zm0-4H4V9h2v2zm0-4H4V5h2v2zm4 12H8v-2h2v2zm0-4H8v-2h2v2zm0-4H8V9h2v2zm0-4H8V5h2v2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8v10zm-2-8h-2v2h2v-2zm0 4h-2v2h2v-2z',
+  billing: 'M18 17H6v-2h12v2zm0-4H6v-2h12v2zm0-4H6V7h12v2zM3 22l1.5-1.5L6 22l1.5-1.5L9 22l1.5-1.5L12 22l1.5-1.5L15 22l1.5-1.5L18 22l1.5-1.5L21 22V2l-1.5 1.5L18 2l-1.5 1.5L15 2l-1.5 1.5L12 2l-1.5 1.5L9 2 7.5 3.5 6 2 4.5 3.5 3 2v20z',
   dashboard: 'M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z',
   events: 'M17 12h-5v5h5v-5zM16 1v2H8V1H6v2H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V5a2 2 0 00-2-2h-1V1h-2zm3 18H5V8h14v11z',
   checkin: 'M3 11h8V3H3v8zm2-6h4v4H5V5zm-2 16h8v-8H3v8zm2-6h4v4H5v-4zm8-12v8h8V3h-8zm6 6h-4V5h4v4zm0 10h2v2h-2zm-6-6h2v2h-2zm2 2h2v2h-2zm-2 2h2v2h-2zm2 2h2v2h-2zm2-2h2v2h-2zm0-4h2v2h-2zm2 2h2v2h-2z',
@@ -19,19 +21,32 @@ const Icon = ({ name }) => (
 );
 
 export default function Layout() {
-  const { user, logout, can } = useApp();
+  const { user, logout, can, isOwner, org, openOrg } = useApp();
+  const nav0 = useNavigate();
   const [open, setOpen] = useState(false);
   const loc = useLocation();
   useEffect(() => setOpen(false), [loc.pathname]);
 
-  const nav = [
+  const orgNav = !org ? [] : [
     can('admin', 'manager') && { to: '/', label: 'Dashboard', icon: 'dashboard', end: true },
     { to: '/events', label: 'Events', icon: 'events' },
     can(...SCAN) && { to: '/checkin', label: 'Check-in', icon: 'checkin' },
     can('admin') && { to: '/users', label: 'Users', icon: 'users' },
     can('admin') && { to: '/settings', label: 'Branding & settings', icon: 'settings' },
+    can('admin') && { to: '/billing', label: 'Billing', icon: 'billing' },
     can('admin') && { to: '/activity', label: 'Activity log', icon: 'activity' },
   ].filter(Boolean);
+  const ownerNav = !isOwner ? [] : [
+    { to: '/platform', label: 'Organizers', icon: 'org', end: true },
+    { to: '/platform/payments', label: 'Payments', icon: 'billing' },
+    { to: '/platform/settings', label: 'Platform settings', icon: 'settings' },
+  ];
+  const link = (n) => (
+    <NavLink key={n.to} to={n.to} end={n.end} className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+      <Icon name={n.icon} /> {n.label}
+    </NavLink>
+  );
+  const exitOrg = () => { openOrg(null); nav0('/platform'); };
 
   return (
     <div className="shell">
@@ -48,19 +63,24 @@ export default function Layout() {
             <div className="brand-sub">Ticketing Management</div>
           </div>
         </div>
+        {org && (
+          <div className={`org-chip ${isOwner ? 'org-chip-owner' : ''}`}>
+            <div className="small muted">{isOwner ? 'Viewing organizer' : 'Organizer'}</div>
+            <div className="org-chip-name">{org.name}</div>
+            {isOwner && <button className="link small" onClick={exitOrg}>← Back to SeatKo platform</button>}
+          </div>
+        )}
         <nav>
-          {nav.map((n) => (
-            <NavLink key={n.to} to={n.to} end={n.end} className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
-              <Icon name={n.icon} /> {n.label}
-            </NavLink>
-          ))}
+          {orgNav.map(link)}
+          {ownerNav.length > 0 && <div className="nav-heading">SeatKo platform</div>}
+          {ownerNav.map(link)}
         </nav>
         <div className="sidebar-foot">
           <NavLink to="/profile" className="me">
             <div className="avatar">{user.name.slice(0, 1).toUpperCase()}</div>
             <div>
               <div className="me-name">{user.name}</div>
-              <div className="me-role">{ROLE_LABEL[user.role]}</div>
+              <div className="me-role">{isOwner ? 'SeatKo owner' : ROLE_LABEL[user.role]}</div>
             </div>
           </NavLink>
           <button className="btn btn-ghost btn-sm" onClick={logout}>Sign out</button>

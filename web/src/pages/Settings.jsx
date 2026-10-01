@@ -1,11 +1,16 @@
 import { useRef, useState } from 'react';
 import { api, assetUrl, API_BASE } from '../api.js';
 import { useAction, useApp } from '../state.jsx';
-import { Field, PageHeader, confirmAction } from '../components/ui.jsx';
+import { Field, PageHeader, Spinner, confirmAction } from '../components/ui.jsx';
 import Ticket from '../components/Ticket.jsx';
 
 export default function Settings() {
-  const { settings, setSettings } = useApp();
+  const { settings } = useApp();
+  return settings ? <SettingsForm /> : <Spinner />;
+}
+
+function SettingsForm() {
+  const { settings, setSettings, org } = useApp();
   const [run, busy] = useAction();
   const fileRef = useRef(null);
   const [f, setF] = useState({
@@ -42,7 +47,7 @@ export default function Settings() {
           <h3>Default ticket &amp; QR logo</h3>
           <p className="muted small">The default logo in the middle of every ticket's QR code and on tickets. An event can use its own logo instead (Edit event → Event logo). Square images work best (PNG, JPG, WEBP or SVG, max 5 MB). Codes use high error correction, so they still scan with the logo on top.</p>
           <div className="logo-row">
-            <img className="qr-preview" src={`${API_BASE}/api/public/qr-preview.svg?color=${encodeURIComponent(f.qr_color.slice(1))}&v=${settings.v}`} alt="QR preview" />
+            <img className="qr-preview" src={`${API_BASE}/api/public/qr-preview.svg?color=${encodeURIComponent(f.qr_color.slice(1))}&org=${org?.id}&v=${settings.v}`} alt="QR preview" />
             <div>
               <img className="logo-thumb" src={assetUrl(settings.logo_url)} alt="Current logo" />
               <div className="btn-row">

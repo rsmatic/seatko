@@ -4,6 +4,7 @@ import { db, audit } from '../db.js';
 import { MANAGE, requireRole } from '../auth.js';
 import { upload, uploadPath } from '../upload.js';
 import { getEvent, eventSummary, tierSummary, refreshSoldOut } from '../services.js';
+import { chargeEventFee } from '../billing.js';
 import { h, str, int, oneOf, color, bad, notFound, updateSet } from '../util.js';
 
 const r = Router();
@@ -37,8 +38,8 @@ function eventFields(body, creating) {
 
 r.get('/', (req, res) => {
   const { status, q } = req.query;
-  let sql = 'SELECT * FROM events WHERE 1=1';
-  const params = [];
+  let sql = 'SELECT * FROM events WHERE org_id = ?';
+  const params = [req.orgId];
   if (status) { sql += ' AND status = ?'; params.push(status); }
   if (q) { sql += ' AND (title LIKE ? OR artist LIKE ? OR venue LIKE ?)'; params.push(`%${q}%`, `%${q}%`, `%${q}%`); }
   sql += ' ORDER BY starts_at DESC';
@@ -46,41 +47,45 @@ r.get('/', (req, res) => {
 });
 
 r.get('/:id', h((req, res) => {
-  const ev = getEvent(req.params.id);
+  const ev = getEvent(req.params.id, req.orgId);
   res.json({ ...withSummary(ev), tiers: tierSummary(ev.id) });
 }));
 
 r.post('/', requireRole(...MANAGE), h((req, res) => {
   const f = eventFields(req.body, true);
   const { lastInsertRowid } = db.prepare(`
-    INSERT INTO events (title, artist, description, venue, address, starts_at, doors_at, status, max_per_order, show_on_website, created_by)
-    VALUES (@title, @artist, @description, @venue, @address, @starts_at, @doors_at, @status, @max_per_order, @show_on_website, @created_by)
+    INSERT INTO events (org_id, title, artist, description, venue, address, starts_at, doors_at, status, max_per_order, show_on_website, created_by)
+    VALUES (@org_id, @title, @artist, @description, @venue, @address, @starts_at, @doors_at, @status, @max_per_order, @show_on_website, @created_by)
   `).run({
     ...f,
     artist: f.artist ?? '', description: f.description ?? '', venue: f.venue ?? '', address: f.address ?? '',
     doors_at: f.doors_at ?? null, status: f.status ?? 'draft', max_per_order: f.max_per_order ?? 10,
-    show_on_website: f.show_on_website ?? 1, created_by: req.user.id,
+    show_on_website: f.show_on_website ?? 1, created_by: req.user.id, org_id: req.orgId,
   });
   audit(req, 'create', 'event', lastInsertRowid, f.title);
+  if ((f.status ?? 'draft') === 'on_sale') chargeEventFee(req.org, getEvent(lastInsertRowid));
   res.status(201).json(withSummary(getEvent(lastInsertRowid)));
 }));
 
 r.patch('/:id', requireRole(...MANAGE), h((req, res) => {
-  const ev = getEvent(req.params.id);
+  const ev = getEvent(req.params.id, req.orgId);
   const { sql, params } = updateSet(eventFields(req.body, false));
   if (sql) db.prepare(`UPDATE events SET ${sql}, updated_at = datetime('now') WHERE id = @id`).run({ ...params, id: ev.id });
-  if (params.status === 'on_sale') refreshSoldOut(ev.id);
+  if (params.status === 'on_sale') {
+    refreshSoldOut(ev.id);
+    chargeEventFee(req.org, ev);
+  }
   audit(req, 'update', 'event', ev.id, params);
   res.json(withSummary(getEvent(ev.id)));
 }));
 
 r.post('/:id/duplicate', requireRole(...MANAGE), h((req, res) => {
-  const ev = getEvent(req.params.id);
+  const ev = getEvent(req.params.id, req.orgId);
   const copy = db.transaction(() => {
     const { lastInsertRowid: newId } = db.prepare(`
-      INSERT INTO events (title, artist, description, venue, address, starts_at, doors_at, status, max_per_order, show_on_website, poster, created_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, NULL, ?)
-    `).run(`${ev.title} (copy)`, ev.artist, ev.description, ev.venue, ev.address, ev.starts_at, ev.doors_at, ev.max_per_order,
+      INSERT INTO events (org_id, title, artist, description, venue, address, starts_at, doors_at, status, max_per_order, show_on_website, poster, created_by)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, NULL, ?)
+    `).run(ev.org_id, `${ev.title} (copy)`, ev.artist, ev.description, ev.venue, ev.address, ev.starts_at, ev.doors_at, ev.max_per_order,
       ev.show_on_website, req.user.id);
     const tierMap = new Map();
     for (const t of db.prepare('SELECT * FROM tiers WHERE event_id = ?').all(ev.id)) {
@@ -108,7 +113,7 @@ r.post('/:id/duplicate', requireRole(...MANAGE), h((req, res) => {
 }));
 
 r.delete('/:id', requireRole(...MANAGE), h((req, res) => {
-  const ev = getEvent(req.params.id);
+  const ev = getEvent(req.params.id, req.orgId);
   if (db.prepare('SELECT 1 FROM orders WHERE event_id = ?').get(ev.id)) {
     throw bad('This event already has orders. Set its status to Cancelled instead of deleting it.');
   }
@@ -119,7 +124,7 @@ r.delete('/:id', requireRole(...MANAGE), h((req, res) => {
 }));
 
 r.post('/:id/poster', requireRole(...MANAGE), upload.single('poster'), h((req, res) => {
-  const ev = getEvent(req.params.id);
+  const ev = getEvent(req.params.id, req.orgId);
   if (!req.file) throw bad('Choose an image file to upload');
   if (ev.poster) fs.rm(uploadPath(ev.poster), { force: true }, () => {});
   db.prepare("UPDATE events SET poster = ?, updated_at = datetime('now') WHERE id = ?").run(req.file.filename, ev.id);
@@ -130,7 +135,7 @@ r.post('/:id/poster', requireRole(...MANAGE), upload.single('poster'), h((req, r
 // Optional event logo: shown in the middle of this event's QR codes and on its tickets
 // instead of the default logo from Branding & settings.
 r.post('/:id/logo', requireRole(...MANAGE), upload.single('logo'), h((req, res) => {
-  const ev = getEvent(req.params.id);
+  const ev = getEvent(req.params.id, req.orgId);
   if (!req.file) throw bad('Choose an image file to upload');
   if (ev.logo) fs.rm(uploadPath(ev.logo), { force: true }, () => {});
   db.prepare("UPDATE events SET logo = ?, updated_at = datetime('now') WHERE id = ?").run(req.file.filename, ev.id);
@@ -139,7 +144,7 @@ r.post('/:id/logo', requireRole(...MANAGE), upload.single('logo'), h((req, res) 
 }));
 
 r.delete('/:id/logo', requireRole(...MANAGE), h((req, res) => {
-  const ev = getEvent(req.params.id);
+  const ev = getEvent(req.params.id, req.orgId);
   if (ev.logo) fs.rm(uploadPath(ev.logo), { force: true }, () => {});
   db.prepare("UPDATE events SET logo = NULL, updated_at = datetime('now') WHERE id = ?").run(ev.id);
   audit(req, 'remove_logo', 'event', ev.id);
@@ -162,10 +167,10 @@ function tierFields(body, creating) {
   return f;
 }
 
-r.get('/:id/tiers', h((req, res) => res.json(tierSummary(getEvent(req.params.id).id))));
+r.get('/:id/tiers', h((req, res) => res.json(tierSummary(getEvent(req.params.id, req.orgId).id))));
 
 r.post('/:id/tiers', requireRole(...MANAGE), h((req, res) => {
-  const ev = getEvent(req.params.id);
+  const ev = getEvent(req.params.id, req.orgId);
   const f = tierFields(req.body, true);
   const kind = f.kind ?? 'seated';
   if (kind === 'ga' && f.capacity === undefined) throw bad('General admission tiers need a capacity');
@@ -180,7 +185,7 @@ r.post('/:id/tiers', requireRole(...MANAGE), h((req, res) => {
 }));
 
 r.patch('/:id/tiers/:tierId', requireRole(...MANAGE), h((req, res) => {
-  const ev = getEvent(req.params.id);
+  const ev = getEvent(req.params.id, req.orgId);
   const tier = db.prepare('SELECT * FROM tiers WHERE id = ? AND event_id = ?').get(req.params.tierId, ev.id);
   if (!tier) throw notFound('Tier');
   const f = tierFields(req.body, false);
@@ -203,7 +208,7 @@ r.patch('/:id/tiers/:tierId', requireRole(...MANAGE), h((req, res) => {
 }));
 
 r.delete('/:id/tiers/:tierId', requireRole(...MANAGE), h((req, res) => {
-  const ev = getEvent(req.params.id);
+  const ev = getEvent(req.params.id, req.orgId);
   const tier = db.prepare('SELECT * FROM tiers WHERE id = ? AND event_id = ?').get(req.params.tierId, ev.id);
   if (!tier) throw notFound('Tier');
   if (db.prepare('SELECT 1 FROM tickets WHERE tier_id = ?').get(tier.id)) {
@@ -218,7 +223,7 @@ r.delete('/:id/tiers/:tierId', requireRole(...MANAGE), h((req, res) => {
 // ---------- promo codes ----------
 
 r.get('/:id/promos', requireRole(...MANAGE, 'cashier'), h((req, res) => {
-  res.json(db.prepare('SELECT * FROM promo_codes WHERE event_id = ? ORDER BY id DESC').all(getEvent(req.params.id).id));
+  res.json(db.prepare('SELECT * FROM promo_codes WHERE event_id = ? ORDER BY id DESC').all(getEvent(req.params.id, req.orgId).id));
 }));
 
 function promoFields(body, creating) {
@@ -236,7 +241,7 @@ function promoFields(body, creating) {
 }
 
 r.post('/:id/promos', requireRole(...MANAGE), h((req, res) => {
-  const ev = getEvent(req.params.id);
+  const ev = getEvent(req.params.id, req.orgId);
   const f = promoFields(req.body, true);
   if (db.prepare('SELECT 1 FROM promo_codes WHERE event_id = ? AND code = ?').get(ev.id, f.code)) throw bad('That code already exists for this event');
   const { lastInsertRowid } = db.prepare(`
@@ -247,7 +252,8 @@ r.post('/:id/promos', requireRole(...MANAGE), h((req, res) => {
 }));
 
 r.patch('/:id/promos/:promoId', requireRole(...MANAGE), h((req, res) => {
-  const promo = db.prepare('SELECT * FROM promo_codes WHERE id = ? AND event_id = ?').get(req.params.promoId, req.params.id);
+  const ev = getEvent(req.params.id, req.orgId);
+  const promo = db.prepare('SELECT * FROM promo_codes WHERE id = ? AND event_id = ?').get(req.params.promoId, ev.id);
   if (!promo) throw notFound('Promo code');
   const f = promoFields(req.body, false);
   if ((f.kind ?? promo.kind) === 'percent' && (f.value ?? promo.value) > 100) throw bad('Percent discount cannot exceed 100');
@@ -258,7 +264,8 @@ r.patch('/:id/promos/:promoId', requireRole(...MANAGE), h((req, res) => {
 }));
 
 r.delete('/:id/promos/:promoId', requireRole(...MANAGE), h((req, res) => {
-  const promo = db.prepare('SELECT * FROM promo_codes WHERE id = ? AND event_id = ?').get(req.params.promoId, req.params.id);
+  const ev = getEvent(req.params.id, req.orgId);
+  const promo = db.prepare('SELECT * FROM promo_codes WHERE id = ? AND event_id = ?').get(req.params.promoId, ev.id);
   if (!promo) throw notFound('Promo code');
   db.prepare('DELETE FROM promo_codes WHERE id = ?').run(promo.id);
   audit(req, 'delete', 'promo', promo.id, promo.code);

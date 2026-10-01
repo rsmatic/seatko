@@ -1,12 +1,35 @@
-# Seatko: ticketing management
+# SeatKo: ticketing management
 
-A ticketing system for concerts like **[POIMEN](https://rsmatic.github.io/poimen)** live shows. It has a React admin app and a separate REST API.
+A ticketing platform you can rent out to event organizers (bands, churches, schools, promoters). Each organizer gets its own workspace for events, seat maps, QR tickets and check-in, and you bill them per ticket, per event or monthly. It has a React web app and a separate REST API.
 
 ```
 seatko/
 ├─ api/   Express + SQLite REST API (auth, events, seating, sales, QR, check-in)
 └─ web/   React (Vite) admin app, ticket pages, gate scanner
 ```
+
+## Running it as a business (multiple organizers)
+
+There are two kinds of accounts:
+
+- **SeatKo owner** (you): signs in to the *SeatKo platform* pages.
+  - **Organizers**: create an organizer and its first admin account, set its billing terms, suspend or reactivate it, reset staff passwords, and **Open their workspace** to help them.
+  - **Payments**: review the GCash or bank payments organizers submit (with screenshot), then confirm or reject them.
+  - **Platform settings**: your GCash or bank details, shown to organizers.
+- **Organizer staff** (admin, manager, cashier, scanner): see only their own organizer's events, tickets, users and settings. Organizer admins also get a **Billing** page with their plan, balance, charges and a *Submit a payment* form.
+
+Billing terms are set per organizer, so each customer can have the deal you agreed on:
+
+| Model | What gets charged |
+|---|---|
+| Free | Nothing |
+| Per-ticket fee | A fixed amount per ticket and/or a percentage of sales, with an optional number of free tickets per event. Complimentary tickets are never billed. Refunds credit the fee back. |
+| Monthly subscription | A fixed amount every month from the chosen start month |
+| Per-event fee | A fixed amount once per event, when it first goes on sale |
+
+You can also add one-off charges or credits (setup fees, discounts) and record payments you received directly. Suspending an organizer blocks their staff from signing in and hides their events from website embeds; tickets already sold keep working.
+
+The owner account is created on first start. Set `OWNER_EMAIL` / `OWNER_PASSWORD` in `api/.env`, or leave the password empty and read the generated one from `api/data/owner-password.txt`. An install from before multi-organizer support is migrated automatically: all existing data becomes the first organizer.
 
 ## Features
 
@@ -30,7 +53,7 @@ Requires Node 20+.
 ```bash
 npm install              # installs api + web (npm workspaces)
 cp api/.env.example api/.env   # then set JWT_SECRET
-npm run seed             # optional: demo POIMEN concert + staff accounts
+npm run seed             # optional: demo organizer (POIMEN) with a concert + staff accounts
 npm run dev              # API on :4000, web on :5173
 ```
 
@@ -38,6 +61,7 @@ Open http://localhost:5173 and sign in:
 
 | Role    | Email                  | Password      |
 |---------|------------------------|---------------|
+| SeatKo owner | owner@seatko.local | `OWNER_PASSWORD`, or see `api/data/owner-password.txt` |
 | Admin   | admin@seatko.local     | admin123 (from `.env`) |
 | Manager | manager@seatko.local   | password123 (seed) |
 | Cashier | cashier@seatko.local   | password123 (seed) |
@@ -80,7 +104,7 @@ cd ~/seatko && git pull && sudo docker compose -f deploy/docker-compose.yml up -
 
 Back up the database with `sudo docker cp seatko-api:/app/api/data ./seatko-backup`.
 
-## Show tickets on the band website
+## Show tickets on an organizer's website
 
 The API serves an embed script that shows live prices, "X left" / sold-out status, a buy button and a "View my ticket" lookup on any website. For example, add it to the `#concert` section of the POIMEN site:
 

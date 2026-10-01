@@ -3,7 +3,9 @@ import { assetUrl, qrUrl } from '../api.js';
 import { dateLong, money, timeOnly } from '../format.js';
 
 /** Printable ticket. `t` is the shape returned by GET /api/public/tickets/:code. */
-const Ticket = forwardRef(function Ticket({ t, settings }, ref) {
+const Ticket = forwardRef(function Ticket({ t, settings: fallback }, ref) {
+  // Public ticket responses carry their organizer's branding; previews pass settings instead.
+  const settings = t.org ?? fallback;
   const [section, row, seat] = t.seat_label ? t.seat_label.split(' · ') : [];
   const accent = settings?.ticket_accent || '#d4a24c';
   return (
