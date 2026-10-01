@@ -99,9 +99,7 @@ Stop it with: sudo systemctl disable --now seatko-disk-report.timer
     msg.set_content(body)
 
     if dry_run:
-        print(f'Subject: {msg["Subject"]}
-
-{body}')
+        print(f'Subject: {msg["Subject"]}\n\n{body}')
         return
 
     with smtplib.SMTP_SSL(os.environ.get('SMTP_HOST', 'smtp.gmail.com'), int(os.environ.get('SMTP_PORT', '465')), timeout=30) as s:
