@@ -73,18 +73,18 @@ export default function Overview({ event, reloadEvent }) {
                 {event.status === 'cancelled' && <button className="btn" disabled={busy} onClick={() => setStatus('draft')}>Restore as draft</button>}
               </div>
               <h4>Website embed</h4>
-              <p className="small muted">
-                {!event.show_on_website ? 'Hidden. The band site keeps its placeholder text.'
-                  : event.status === 'draft' ? 'Will appear once the event is put on sale.'
-                  : 'Visible on the band site (updates within a minute).'}
-              </p>
-              <div className="btn-row">
-                <button className="btn" disabled={busy}
-                  onClick={() => run(() => api(`/events/${event.id}`, { method: 'PATCH', body: { show_on_website: !event.show_on_website } }),
-                    event.show_on_website ? 'Hidden from website' : 'Shown on website').then(reloadEvent)}>
-                  {event.show_on_website ? 'Hide from website' : 'Show on website'}
-                </button>
+              {/* Two explicit buttons rather than one toggle, so a repeated click can't flip it back. */}
+              <div className="seg-buttons" role="group" aria-label="Show on website">
+                {[[true, 'Show'], [false, 'Hide']].map(([value, label]) => (
+                  <button key={label} className={`btn btn-sm ${!!event.show_on_website === value ? 'btn-primary' : ''}`}
+                    aria-pressed={!!event.show_on_website === value} disabled={busy || !!event.show_on_website === value}
+                    onClick={() => run(() => api(`/events/${event.id}`, { method: 'PATCH', body: { show_on_website: value } }),
+                      value ? 'Shown on website' : 'Hidden from website').then(reloadEvent)}>
+                    {label}
+                  </button>
+                ))}
               </div>
+              <p className="small muted">{websiteNote(event)}</p>
 
               <h4>More</h4>
               <div className="btn-row">
@@ -123,4 +123,17 @@ export default function Overview({ event, reloadEvent }) {
       {editing && <EventForm event={event} onClose={() => setEditing(false)} onSaved={reloadEvent} />}
     </>
   );
+}
+
+/** What visitors of the organizer's website see for this event right now. */
+function websiteNote(event) {
+  if (!event.show_on_website) return 'Hidden: the website shows its own placeholder text instead of this event.';
+  switch (event.status) {
+    case 'draft': return 'Not visible yet: drafts never appear. It will show once the event is put on sale.';
+    case 'on_sale': return 'Visible now: the website shows prices, seats left and the Get tickets button.';
+    case 'sold_out': return 'Visible now: the website shows the prices marked "Sold out".';
+    case 'closed': return 'Visible now, but it says "Ticket sales are closed". Reopen sales to show the Get tickets button.';
+    case 'cancelled': return 'Visible now, and it says "This event has been cancelled".';
+    default: return '';
+  }
 }

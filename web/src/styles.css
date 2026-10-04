@@ -390,3 +390,5 @@ dl.details dd { margin: 0; }
 .email-tickets { margin-top: 1.1rem; padding-top: 1rem; border-top: 1px solid var(--border); }
 .email-tickets .promo { margin: .35rem 0 .3rem; }
 .sent-note { color: var(--ok); }
+.seg-buttons { display: inline-flex; gap: .35rem; margin: .2rem 0 .5rem; }
+.seg-buttons .btn[aria-pressed="true"]:disabled { opacity: 1; cursor: default; }

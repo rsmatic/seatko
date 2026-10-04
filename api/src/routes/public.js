@@ -40,14 +40,14 @@ r.get('/events', h((req, res) => {
     SELECT * FROM events WHERE status IN (${PUBLIC_STATUSES.map(() => '?').join(',')}) AND show_on_website = 1 AND ${ACTIVE_ORG}
       AND (? IS NULL OR org_id = ?) AND (? IS NULL OR artist = ? COLLATE NOCASE) ORDER BY starts_at
   `).all(...PUBLIC_STATUSES, req.query.org || null, Number(req.query.org) || null, req.query.artist || null, req.query.artist || null);
-  res.setHeader('Cache-Control', 'public, max-age=60');
+  res.setHeader('Cache-Control', 'no-cache'); // Show/Hide must take effect immediately
   res.json(rows.map(publicEvent));
 }));
 
 r.get('/events/:id', h((req, res) => {
   const ev = db.prepare('SELECT * FROM events WHERE id = ?').get(req.params.id);
   if (!isPublic(ev)) throw notFound('Event');
-  res.setHeader('Cache-Control', 'public, max-age=60');
+  res.setHeader('Cache-Control', 'no-cache'); // Show/Hide must take effect immediately
   res.json(publicEvent(ev));
 }));
 
