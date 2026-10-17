@@ -5,7 +5,7 @@ import { MANAGE, requireRole } from '../auth.js';
 import { upload, uploadPath } from '../upload.js';
 import { getEvent, eventFor, seesAllEvents, eventSummary, tierSummary, refreshSoldOut } from '../services.js';
 import { chargeEventFee } from '../billing.js';
-import { h, str, int, oneOf, color, bad, notFound, updateSet } from '../util.js';
+import { h, str, int, oneOf, color, bad, notFound, updateSet, HttpError } from '../util.js';
 
 const r = Router();
 const STATUSES = ['draft', 'on_sale', 'sold_out', 'closed', 'cancelled'];
@@ -120,15 +120,28 @@ r.post('/:id/duplicate', requireRole(...MANAGE), h((req, res) => {
   res.status(201).json(withSummary(getEvent(copy)));
 }));
 
+// Delete an event. One with sales takes everything with it (orders, tickets, seats, tiers, promo
+// codes), so only admins may do that, and they must type the event's exact title to confirm.
+// SeatKo billing charges already recorded for it are kept (their event link is cleared).
 r.delete('/:id', requireRole(...MANAGE), h((req, res) => {
   const ev = eventFor(req, req.params.id);
-  if (db.prepare('SELECT 1 FROM orders WHERE event_id = ?').get(ev.id)) {
-    throw bad('This event already has orders. Set its status to Cancelled instead of deleting it.');
+  const counts = db.prepare(`
+    SELECT (SELECT COUNT(*) FROM orders WHERE event_id = @id) AS orders,
+           (SELECT COUNT(*) FROM tickets WHERE event_id = @id) AS tickets,
+           (SELECT COALESCE(SUM(total_cents), 0) FROM orders WHERE event_id = @id AND status = 'paid') AS revenue_cents
+  `).get({ id: ev.id });
+  if (counts.orders) {
+    if (!req.user.is_superadmin && req.user.role !== 'admin') {
+      throw new HttpError(403, 'Only an admin can delete an event that already has sales');
+    }
+    if (String(req.body?.confirm_title ?? '').trim() !== ev.title.trim()) {
+      throw bad('Type the event name exactly to confirm deleting it with all its orders and tickets');
+    }
   }
-  db.prepare('DELETE FROM events WHERE id = ?').run(ev.id);
+  db.prepare('DELETE FROM events WHERE id = ?').run(ev.id); // cascades to tiers, sections, seats, promos, orders, tickets
   for (const f of [ev.poster, ev.logo]) if (f) fs.rm(uploadPath(f), { force: true }, () => {});
-  audit(req, 'delete', 'event', ev.id, ev.title);
-  res.json({ ok: true });
+  audit(req, 'delete', 'event', ev.id, { title: ev.title, ...counts });
+  res.json({ ok: true, deleted: counts });
 }));
 
 r.post('/:id/poster', requireRole(...MANAGE), upload.single('poster'), h((req, res) => {

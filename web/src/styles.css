@@ -392,3 +392,7 @@ dl.details dd { margin: 0; }
 .sent-note { color: var(--ok); }
 .seg-buttons { display: inline-flex; gap: .35rem; margin: .2rem 0 .5rem; }
 .seg-buttons .btn[aria-pressed="true"]:disabled { opacity: 1; cursor: default; }
+.btn-danger { background: var(--bad); border-color: var(--bad); color: #fff; }
+.btn-danger:hover:not(:disabled) { filter: brightness(1.1); border-color: var(--bad); }
+.delete-list { margin: .3rem 0 1rem; padding-left: 1.2rem; }
+.delete-list li { margin-bottom: .3rem; }

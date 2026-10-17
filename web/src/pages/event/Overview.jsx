@@ -1,13 +1,14 @@
 import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api, assetUrl } from '../../api.js';
+import { api, assetUrl, download } from '../../api.js';
 import { useAction, useApp, MANAGE } from '../../state.jsx';
 import { dateLong, dateTime, money, timeOnly } from '../../format.js';
-import { Meter, Stat, confirmAction } from '../../components/ui.jsx';
+import { Field, Meter, Modal, Stat, confirmAction } from '../../components/ui.jsx';
 import EventForm from '../../components/EventForm.jsx';
 
 export default function Overview({ event, reloadEvent }) {
   const { can, settings } = useApp();
+  const [deleting, setDeleting] = useState(false);
   const nav = useNavigate();
   const [run, busy] = useAction();
   const [editing, setEditing] = useState(false);
@@ -27,6 +28,8 @@ export default function Overview({ event, reloadEvent }) {
     nav(`/events/${copy.id}`);
   };
   const remove = async () => {
+    // With sales, a typed confirmation is required (see DeleteEventModal).
+    if (s.orders > 0) return setDeleting(true);
     if (!confirmAction(`Delete "${event.title}"? This cannot be undone.`)) return;
     await run(() => api(`/events/${event.id}`, { method: 'DELETE' }), 'Event deleted');
     nav('/events');
@@ -89,7 +92,9 @@ export default function Overview({ event, reloadEvent }) {
               <h4>More</h4>
               <div className="btn-row">
                 <button className="btn" onClick={duplicate} disabled={busy}>Duplicate event</button>
-                {s.orders === 0 && <button className="btn btn-danger-ghost" onClick={remove} disabled={busy}>Delete</button>}
+                {(s.orders === 0 || can('admin')) && (
+                  <button className="btn btn-danger-ghost" onClick={remove} disabled={busy}>{s.orders ? 'Delete event & all sales' : 'Delete'}</button>
+                )}
               </div>
             </>
           )}
@@ -120,6 +125,7 @@ export default function Overview({ event, reloadEvent }) {
           ))}
         </section>
       </div>
+      {deleting && <DeleteEventModal event={event} onClose={() => setDeleting(false)} onDeleted={() => nav('/events')} />}
       {editing && <EventForm event={event} onClose={() => setEditing(false)} onSaved={reloadEvent} />}
     </>
   );
@@ -136,4 +142,40 @@ function websiteNote(event) {
     case 'cancelled': return 'Visible now, and it says "This event has been cancelled".';
     default: return '';
   }
+}
+
+/** Permanently delete an event that has sales: everything goes, so the admin must type its name. */
+function DeleteEventModal({ event, onClose, onDeleted }) {
+  const [run, busy] = useAction();
+  const [typed, setTyped] = useState('');
+  const s = event.summary;
+  const match = typed.trim() === event.title.trim();
+  const exportCsv = () => run(() => download(`/events/${event.id}/tickets.csv`, `${event.title}-attendees.csv`));
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!match) return;
+    await run(() => api(`/events/${event.id}`, { method: 'DELETE', body: { confirm_title: typed } }), `"${event.title}" and all its sales were deleted`);
+    onDeleted();
+  };
+  return (
+    <Modal title="Delete event permanently" onClose={onClose}
+      footer={<>
+        <button className="btn" onClick={onClose}>Cancel</button>
+        <button className="btn btn-danger" form="delete-event-form" disabled={!match || busy}>{busy ? 'Deleting…' : 'Delete forever'}</button>
+      </>}>
+      <div className="alert alert-error">This cannot be undone.</div>
+      <p>Deleting <strong>{event.title}</strong> also deletes:</p>
+      <ul className="delete-list">
+        <li><strong>{s.orders}</strong> order{s.orders === 1 ? '' : 's'} ({money(s.revenue_cents)} in sales records)</li>
+        <li><strong>{s.sold}</strong> ticket{s.sold === 1 ? '' : 's'}: their QR codes and links stop working</li>
+        <li>The seat map, prices and promo codes of this event</li>
+      </ul>
+      <p className="small muted">Want to keep a copy? <button type="button" className="link" onClick={exportCsv}>Export the attendee list (CSV)</button> first.</p>
+      <form id="delete-event-form" onSubmit={submit}>
+        <Field label={`Type the event name to confirm: ${event.title}`}>
+          <input value={typed} onChange={(e) => setTyped(e.target.value)} autoComplete="off" placeholder={event.title} />
+        </Field>
+      </form>
+    </Modal>
+  );
 }
