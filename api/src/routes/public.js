@@ -20,12 +20,16 @@ function publicEvent(ev) {
       name: t.name, description: t.description, price_cents: t.price_cents, color: t.color,
       kind: t.kind, remaining: Math.max(0, t.total - t.sold),
     }));
+  const s = getSettings(ev.org_id);
   return {
     id: ev.id, title: ev.title, artist: ev.artist, description: ev.description, venue: ev.venue, address: ev.address,
     starts_at: ev.starts_at, doors_at: ev.doors_at, status: ev.status,
     poster_url: ev.poster ? `/uploads/${ev.poster}` : null,
     logo_url: ev.logo ? `/uploads/${ev.logo}` : null,
-    currency: getSettings(ev.org_id).currency, tiers,
+    currency: s.currency, tiers,
+    // For the embed's "Get tickets" window.
+    org_name: s.org_name,
+    buy_instructions: s.buy_instructions,
   };
 }
 

@@ -15,7 +15,7 @@ function SettingsForm() {
   const fileRef = useRef(null);
   const [f, setF] = useState({
     org_name: settings.org_name, org_tagline: settings.org_tagline, currency: settings.currency,
-    qr_color: settings.qr_color, ticket_accent: settings.ticket_accent, ticket_footer: settings.ticket_footer,
+    qr_color: settings.qr_color, ticket_accent: settings.ticket_accent, ticket_footer: settings.ticket_footer, buy_instructions: settings.buy_instructions ?? '',
   });
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
 
@@ -69,6 +69,11 @@ function SettingsForm() {
             <Field label="QR color" hint="Keep it dark for reliable scanning"><input type="color" value={f.qr_color} onChange={set('qr_color')} /></Field>
             <Field label="Ticket accent"><input type="color" value={f.ticket_accent} onChange={set('ticket_accent')} /></Field>
             <Field label="Ticket footer text" span={2}><input value={f.ticket_footer} onChange={set('ticket_footer')} /></Field>
+            <Field label="How to buy tickets (shown on your website)" span={2}
+              hint="Appears when a visitor clicks Get tickets in the website embed. Example: how to pay, where to send the screenshot, when they get their ticket.">
+              <textarea rows={4} value={f.buy_instructions} onChange={set('buy_instructions')}
+                placeholder={'1. Send your payment via GCash to 09xx xxx xxxx (Juan D.)\n2. Send the screenshot to us on Messenger\n3. We will email your ticket with its QR code'} />
+            </Field>
           </div>
           <button className="btn btn-primary" disabled={busy}>Save settings</button>
         </form>

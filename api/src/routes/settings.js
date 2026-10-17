@@ -20,6 +20,7 @@ export function publicSettings(orgId) {
     qr_color: s.qr_color,
     ticket_accent: s.ticket_accent,
     ticket_footer: s.ticket_footer,
+    buy_instructions: s.buy_instructions,
     logo_url: s.logo ? `/uploads/${s.logo}` : '/api/settings/default-logo',
     has_custom_logo: !!s.logo,
     email_enabled: mailEnabled(),
@@ -46,6 +47,7 @@ r.put('/', requireRole('admin'), h((req, res) => {
     qr_color: color(req.body.qr_color, 'QR color'),
     ticket_accent: color(req.body.ticket_accent, 'Ticket accent'),
     ticket_footer: str(req.body.ticket_footer, 'Ticket footer', { max: 300 }),
+    buy_instructions: str(req.body.buy_instructions, 'How to buy', { max: 2000 }),
   };
   if (fields.currency && !/^[A-Z]{3}$/.test(fields.currency)) throw bad('Currency must be a 3-letter ISO code, e.g. PHP');
   for (const [k, v] of Object.entries(fields)) if (v !== undefined) setSetting.run(req.orgId, k, v);

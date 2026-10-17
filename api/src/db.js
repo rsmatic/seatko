@@ -265,6 +265,8 @@ export const DEFAULT_ORG_SETTINGS = {
   qr_color: '#111111',
   ticket_accent: '#d4a24c',
   ticket_footer: 'Present this QR code at the entrance. One scan per ticket.',
+  // Shown on the organizer's website when a visitor clicks "Get tickets".
+  buy_instructions: '',
 };
 
 export function initOrgSettings(orgId, overrides = {}) {

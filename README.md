@@ -120,6 +120,7 @@ The API serves an embed script that shows live prices, "X left" / sold-out statu
 
 - `data-seatko-event` is the event ID. It's the number in the admin URL, e.g. `/events/1`.
 - `data-buy-url` is where buyers go to purchase (Messenger, a form, etc.). Staff then sell the ticket at the box office and send the buyer their `/t/CODE` link.
+- Clicking **Get tickets** opens a small window where the visitor picks ticket types and quantities, reads the organizer's *How to buy tickets* text (Branding & settings), and sends a ready-made message. For a Messenger link the message is pre-filled when Messenger allows it, and it is always copied so they can paste it. Add `data-buy-mode="link"` to skip the window and go straight to the link.
 - `data-app-url` is optional. Set it if the web app lives on a different host than the API, so "View my ticket" opens the right site.
 - Only events that are on sale, sold out, closed or cancelled are public. Drafts stay hidden.
 - The widget reuses the host page's `.btn` classes and CSS variables (`--accent`, `--display`, …).

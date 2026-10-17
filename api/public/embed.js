@@ -2,8 +2,12 @@
  * Seatko embed: shows live ticket prices and availability for an event on any website.
  *
  *   <div data-seatko-event="1"
- *        data-buy-url="https://m.me/Poimenph"      (where the "Get tickets" button goes)
+ *        data-buy-url="https://m.me/Poimenph"      (where buyers message you, e.g. your Messenger link)
  *        data-buy-label="Get tickets"></div>
+ *
+ * "Get tickets" opens a small window: the visitor picks tiers and quantities, reads your
+ * "How to buy" instructions (Branding & settings), and sends a ready-made message via the buy URL.
+ * Add data-buy-mode="link" to make the button go straight to the buy URL instead.
  *   <script src="https://YOUR-SEATKO-HOST/embed.js" defer></script>
  *
  * Styling inherits the host page's --accent, --text, --muted, --line, --bg-2, --radius, --display
@@ -28,6 +32,28 @@
     '.seatko-find input{font:inherit;padding:.55rem .8rem;border-radius:var(--pill,999px);border:1px solid var(--line,#2a2a2e);background:transparent;color:inherit;width:14rem;text-transform:uppercase}',
     '.seatko-find button{background:transparent;color:inherit;cursor:pointer;font:inherit}',
     '.seatko-status{color:var(--accent,#d9b56c);font-weight:600}',
+    // "Get tickets" window
+    '.seatko-dlg{border:1px solid var(--line,#2a2a2e);border-radius:var(--radius,12px);background:var(--bg-2,#141416);color:var(--text,#ececec);padding:0;width:min(30rem,calc(100vw - 2rem));max-height:calc(100vh - 2rem);font:inherit}',
+    '.seatko-dlg::backdrop{background:rgba(0,0,0,.65)}',
+    '.seatko-dlg form{position:relative;padding:1.25rem 1.25rem 1rem;display:flex;flex-direction:column;gap:.85rem;text-align:left}',
+    '.seatko-dlg h3{margin:0 2rem 0 0;font-family:var(--display,inherit);font-size:1.4rem;letter-spacing:.03em;line-height:1.15}',
+    '.seatko-x{position:absolute;top:.6rem;right:.8rem;background:none;border:0;color:inherit;font-size:1.5rem;cursor:pointer;line-height:1}',
+    '.seatko-row{display:flex;align-items:center;justify-content:space-between;gap:.75rem;padding:.5rem 0;border-bottom:1px solid var(--line,#2a2a2e)}',
+    '.seatko-row small{display:block;color:var(--muted,#9a9aa2)}',
+    '.seatko-step{display:flex;align-items:center;gap:.5rem}',
+    '.seatko-step button{width:2rem;height:2rem;border-radius:50%;border:1px solid var(--line,#2a2a2e);background:transparent;color:inherit;font-size:1.1rem;cursor:pointer}',
+    '.seatko-step button:disabled{opacity:.35;cursor:default}',
+    '.seatko-step span{min-width:1.4rem;text-align:center;font-weight:600}',
+    '.seatko-total{display:flex;justify-content:space-between;font-weight:700;font-size:1.05rem}',
+    '.seatko-dlg label{font-size:.8rem;color:var(--muted,#9a9aa2);display:flex;flex-direction:column;gap:.3rem}',
+    '.seatko-dlg input,.seatko-dlg textarea{font:inherit;font-size:.9rem;color:var(--text,#ececec);background:transparent;border:1px solid var(--line,#2a2a2e);border-radius:8px;padding:.55rem .7rem}',
+    '.seatko-how{white-space:pre-wrap;background:rgba(255,255,255,.05);border-radius:8px;padding:.7rem .85rem;font-size:.9rem;line-height:1.5}',
+    '.seatko-how strong{display:block;margin-bottom:.25rem}',
+    '.seatko-dlg .seatko-actions .btn{flex:1;text-align:center;cursor:pointer;font:inherit}',
+    '.seatko-dlg .seatko-actions .btn:disabled{opacity:.45;cursor:default}',
+    '.seatko-note{font-size:.8rem;color:var(--muted,#9a9aa2);text-align:center;margin:0}',
+    // Host sites may only style <a class="btn">; keep the secondary <button> transparent like theirs.
+    '.seatko-dlg .btn:not(.primary){background:transparent;color:inherit;border:1px solid var(--line,#2a2a2e)}',
   ].join('');
   var style = document.createElement('style');
   style.textContent = css;
@@ -48,11 +74,11 @@
     }
   }
 
-  function when(ev) {
+  function when(ev, withDoors) {
     var d = new Date(ev.starts_at);
     var s = d.toLocaleDateString('en-PH', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) +
       ' · ' + d.toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit' });
-    if (ev.doors_at) s += ' (doors ' + new Date(ev.doors_at).toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit' }) + ')';
+    if (ev.doors_at && withDoors !== false) s += ' (doors ' + new Date(ev.doors_at).toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit' }) + ')';
     return s;
   }
 
@@ -90,6 +116,10 @@
         a.href = buyUrl;
         a.target = '_blank';
         a.rel = 'noopener';
+        var onSale = ev.tiers.some(function (t) { return t.remaining > 0; });
+        if (root.getAttribute('data-buy-mode') !== 'link' && onSale && window.HTMLDialogElement) {
+          a.addEventListener('click', function (e) { e.preventDefault(); openBuyDialog(ev, buyUrl); });
+        }
         actions.appendChild(a);
       }
       box.appendChild(actions);
@@ -111,6 +141,157 @@
     box.appendChild(find);
 
     root.replaceChildren(box);
+  }
+
+  function copyText(text) {
+    function fallback() {
+      var t = document.createElement('textarea');
+      t.value = text;
+      t.style.position = 'fixed';
+      t.style.opacity = '0';
+      document.body.appendChild(t);
+      t.select();
+      try { document.execCommand('copy'); } catch (e) { /* nothing more to try */ }
+      t.remove();
+    }
+    if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(text).catch(fallback);
+    fallback();
+    return Promise.resolve();
+  }
+
+  function hostOf(url) {
+    try { return new URL(url).hostname; } catch (e) { return ''; }
+  }
+
+  /** "Get tickets" window: pick tiers, read how to pay, send a ready-made message. */
+  function openBuyDialog(ev, buyUrl) {
+    var qty = {};
+    var dlg = el('dialog', 'seatko-dlg');
+    dlg.setAttribute('aria-label', 'Get tickets');
+    var form = el('form');
+    form.method = 'dialog';
+    var close = el('button', 'seatko-x', '×');
+    close.type = 'button';
+    close.setAttribute('aria-label', 'Close');
+    close.addEventListener('click', function () { dlg.close(); });
+    form.appendChild(close);
+    form.appendChild(el('h3', null, ev.title));
+    form.appendChild(el('div', 'seatko-note', when(ev)));
+
+    var list = el('div');
+    var total = el('div', 'seatko-total');
+    var totalAmount = el('span');
+    total.appendChild(el('span', null, 'Total'));
+    total.appendChild(totalAmount);
+
+    ev.tiers.forEach(function (t, i) {
+      if (!t.remaining) return;
+      var max = Math.min(t.remaining, 10);
+      var row = el('div', 'seatko-row');
+      var info = el('div');
+      info.appendChild(el('strong', null, t.name));
+      info.appendChild(el('small', null, money(t.price_cents, ev.currency) + (t.remaining <= 20 ? ' · only ' + t.remaining + ' left' : '')));
+      var step = el('div', 'seatko-step');
+      var minus = el('button', null, '−');
+      var count = el('span', null, '0');
+      var plus = el('button', null, '+');
+      minus.type = plus.type = 'button';
+      minus.setAttribute('aria-label', 'Fewer ' + t.name);
+      plus.setAttribute('aria-label', 'More ' + t.name);
+      count.setAttribute('aria-live', 'polite');
+      function set(n) {
+        qty[i] = Math.max(0, Math.min(max, n));
+        count.textContent = String(qty[i]);
+        minus.disabled = qty[i] === 0;
+        plus.disabled = qty[i] === max;
+        update();
+      }
+      minus.addEventListener('click', function () { set((qty[i] || 0) - 1); });
+      plus.addEventListener('click', function () { set((qty[i] || 0) + 1); });
+      step.appendChild(minus);
+      step.appendChild(count);
+      step.appendChild(plus);
+      row.appendChild(info);
+      row.appendChild(step);
+      list.appendChild(row);
+      qty[i] = 0;
+      minus.disabled = true;
+    });
+    form.appendChild(list);
+    form.appendChild(total);
+
+    var nameLabel = el('label', null, 'Your name (optional)');
+    var name = el('input');
+    name.autocomplete = 'name';
+    nameLabel.appendChild(name);
+    form.appendChild(nameLabel);
+
+    if (ev.buy_instructions) {
+      var how = el('div', 'seatko-how');
+      how.appendChild(el('strong', null, 'How to buy'));
+      how.appendChild(document.createTextNode(ev.buy_instructions));
+      form.appendChild(how);
+    }
+
+    var msgLabel = el('label', null, 'Your message');
+    var msg = el('textarea');
+    msg.rows = 6;
+    msgLabel.appendChild(msg);
+    form.appendChild(msgLabel);
+
+    var isMessenger = /(^|\.)(m\.me|messenger\.com)$/i.test(hostOf(buyUrl));
+    var actions = el('div', 'seatko-actions');
+    var send = el('button', 'btn primary', isMessenger ? 'Send via Messenger' : 'Continue');
+    var copy = el('button', 'btn', 'Copy message');
+    send.type = copy.type = 'button';
+    actions.appendChild(send);
+    actions.appendChild(copy);
+    form.appendChild(actions);
+    var note = el('p', 'seatko-note', '');
+    form.appendChild(note);
+
+    var edited = false;
+    msg.addEventListener('input', function () { edited = true; });
+    name.addEventListener('input', update);
+
+    function update() {
+      var lines = [];
+      var sum = 0;
+      ev.tiers.forEach(function (t, i) {
+        if (!qty[i]) return;
+        sum += qty[i] * t.price_cents;
+        lines.push('- ' + qty[i] + ' × ' + t.name + ' (' + money(t.price_cents, ev.currency) + ' each)');
+      });
+      totalAmount.textContent = money(sum, ev.currency);
+      send.disabled = !lines.length;
+      if (edited) return;
+      msg.value = ['Hi ' + (ev.org_name || 'there') + '! I would like to buy tickets for ' + ev.title + ' on ' + when(ev, false) + ':']
+        .concat(lines.length ? lines : ['- (choose your tickets above)'])
+        .concat(lines.length ? ['Total: ' + money(sum, ev.currency)] : [])
+        .concat(name.value.trim() ? ['Name: ' + name.value.trim()] : [])
+        .concat(['', 'How can I pay?'])
+        .join('\n');
+    }
+
+    send.addEventListener('click', function () {
+      var text = msg.value;
+      copyText(text);
+      var url = buyUrl;
+      // Messenger may pre-fill the text; if it doesn't, the message is already on the clipboard.
+      if (isMessenger) url += (url.indexOf('?') < 0 ? '?' : '&') + 'text=' + encodeURIComponent(text);
+      window.open(url, '_blank', 'noopener');
+      note.textContent = 'Your message was copied. If Messenger opens empty, just paste it and send.';
+    });
+    copy.addEventListener('click', function () {
+      copyText(msg.value).then(function () { note.textContent = 'Message copied.'; });
+    });
+
+    update();
+    dlg.appendChild(form);
+    dlg.addEventListener('close', function () { dlg.remove(); });
+    dlg.addEventListener('click', function (e) { if (e.target === dlg) dlg.close(); });
+    document.body.appendChild(dlg);
+    dlg.showModal();
   }
 
   function load(root) {
