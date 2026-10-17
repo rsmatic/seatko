@@ -23,7 +23,7 @@ function beep(ok) {
     o.connect(g).connect(ctx.destination);
     o.start();
     o.stop(ctx.currentTime + (ok ? 0.12 : 0.35));
-    if (!ok) navigator.vibrate?.(300);
+    navigator.vibrate?.(ok ? 80 : [200, 80, 200]);
   } catch { /* audio unavailable */ }
 }
 
@@ -31,6 +31,9 @@ export default function CheckIn() {
   const events = useLoad('/events');
   const [eventId, setEventId] = useState('');
   const [result, setResult] = useState(null);
+  // Big colour flash on the scanner card itself, so a phone user sees the outcome without scrolling.
+  const [flash, setFlash] = useState(null);
+  const flashTimer = useRef(null);
   const [manual, setManual] = useState('');
   const [camera, setCamera] = useState(false);
   const [camError, setCamError] = useState('');
@@ -47,6 +50,16 @@ export default function CheckIn() {
     }
   }, [events.data, eventId]);
 
+  const showFlash = (r) => {
+    const kind = r.result === 'ok' ? 'ok' : r.result === 'already_used' ? 'warn' : 'bad';
+    const t = r.ticket;
+    const detail = t ? [t.holder_name, t.seat_label ?? t.tier_name].filter(Boolean).join(' · ') : r.message;
+    setFlash({ kind, key: Date.now(), title: RESULT_STYLE[r.result]?.title ?? 'Invalid', detail });
+    clearTimeout(flashTimer.current);
+    flashTimer.current = setTimeout(() => setFlash(null), 4000);
+  };
+  useEffect(() => () => clearTimeout(flashTimer.current), []);
+
   const check = useCallback(async (code) => {
     const now = Date.now();
     if (code === lastScan.current.code && now - lastScan.current.at < 3000) return; // same QR still in frame
@@ -54,10 +67,13 @@ export default function CheckIn() {
     try {
       const r = await api('/checkin', { method: 'POST', body: { code, event_id: Number(eventId) } });
       setResult(r);
+      showFlash(r);
       beep(r.result === 'ok');
       if (r.result === 'ok') { recent.reload(); stats.reload(); }
     } catch (e) {
-      setResult({ result: 'not_found', message: e.message });
+      const r = { result: 'not_found', message: e.message };
+      setResult(r);
+      showFlash(r);
       beep(false);
     }
   }, [eventId, recent, stats]);
@@ -100,8 +116,14 @@ export default function CheckIn() {
 
       {!eventId ? <div className="alert">Choose the event you're checking people into.</div> : (
         <div className="grid-2">
-          <section className="card">
+          <section className={`card scan-card ${flash ? `scan-card-${flash.kind}` : ''}`}>
             {s && <div className="checkin-count"><strong>{s.checked_in}</strong> / {s.sold} checked in</div>}
+            {flash && (
+              <div key={flash.key} className="scan-flash" role="status" aria-live="assertive">
+                <div className="scan-flash-title">{flash.kind === 'ok' ? '✓ ' : flash.kind === 'warn' ? '! ' : '✕ '}{flash.title}</div>
+                {flash.detail && <div className="scan-flash-detail">{flash.detail}</div>}
+              </div>
+            )}
             <div id="qr-reader" className={camera ? 'qr-reader on' : 'qr-reader'} />
             {camError && <div className="alert alert-error">Camera unavailable: {camError}. Camera access needs HTTPS or localhost.</div>}
             <button className={`btn btn-block ${camera ? '' : 'btn-primary'}`} onClick={() => setCamera(!camera)}>{camera ? 'Stop camera' : 'Start camera scanner'}</button>

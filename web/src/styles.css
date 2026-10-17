@@ -396,3 +396,16 @@ dl.details dd { margin: 0; }
 .btn-danger:hover:not(:disabled) { filter: brightness(1.1); border-color: var(--bad); }
 .delete-list { margin: .3rem 0 1rem; padding-left: 1.2rem; }
 .delete-list li { margin-bottom: .3rem; }
+
+/* Check-in: the scanner card itself turns green / orange / red after each scan */
+.scan-card { transition: background-color .2s, border-color .2s, box-shadow .2s; border-width: 2px; }
+.scan-card-ok { background: #0f3a22; border-color: #3fb67a; box-shadow: 0 0 0 4px rgba(63,182,122,.25); }
+.scan-card-warn { background: #3d2508; border-color: #f39c34; box-shadow: 0 0 0 4px rgba(243,156,52,.25); }
+.scan-card-bad { background: #401313; border-color: #e25c5c; box-shadow: 0 0 0 4px rgba(226,92,92,.25); }
+.scan-flash { border-radius: 10px; padding: .7rem .9rem; margin-bottom: .75rem; color: #fff; animation: scan-pop .25s ease-out; }
+.scan-card-ok .scan-flash { background: #23a35f; }
+.scan-card-warn .scan-flash { background: #e8851b; }
+.scan-card-bad .scan-flash { background: #d23f3f; }
+.scan-flash-title { font: 600 1.5rem/1.2 var(--display); letter-spacing: .03em; }
+.scan-flash-detail { font-size: .95rem; margin-top: .15rem; overflow-wrap: anywhere; }
+@keyframes scan-pop { from { transform: scale(.96); opacity: .4; } to { transform: none; opacity: 1; } }
