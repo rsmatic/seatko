@@ -16,9 +16,12 @@ import statsRoutes from './routes/stats.js';
 import publicRoutes from './routes/public.js';
 import billingRoutes from './routes/billing.js';
 import platformRoutes from './routes/platform.js';
+import { publicRequests, staffRequests } from './routes/requests.js';
 
 const app = express();
 app.disable('x-powered-by');
+// Behind one reverse proxy (Caddy): use the visitor's address for rate limiting.
+app.set('trust proxy', 1);
 app.use(cors({ origin: config.corsOrigin }));
 app.use(express.json({ limit: '1mb' }));
 
@@ -39,6 +42,7 @@ app.get('/api/health', (_req, res) => res.json({ ok: true }));
 app.use('/api/auth', authRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/public', publicRoutes);
+app.use('/api/public', publicRequests);
 
 app.use('/api', requireAuth);
 // SeatKo owner only.
@@ -50,6 +54,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/events/:id', seatingRoutes);
 app.use('/api', salesRoutes);
+app.use('/api', staffRequests);
 app.use('/api', statsRoutes);
 
 app.use('/api', (_req, res) => res.status(404).json({ error: 'Not found' }));

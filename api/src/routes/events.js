@@ -2,7 +2,7 @@ import { Router } from 'express';
 import fs from 'node:fs';
 import { db, audit } from '../db.js';
 import { MANAGE, requireRole } from '../auth.js';
-import { upload, uploadPath } from '../upload.js';
+import { upload, uploadPath, proofPath } from '../upload.js';
 import { getEvent, eventFor, seesAllEvents, eventSummary, tierSummary, refreshSoldOut } from '../services.js';
 import { chargeEventFee } from '../billing.js';
 import { h, str, int, oneOf, color, bad, notFound, updateSet, HttpError } from '../util.js';
@@ -138,7 +138,9 @@ r.delete('/:id', requireRole(...MANAGE), h((req, res) => {
       throw bad('Type the event name exactly to confirm deleting it with all its orders and tickets');
     }
   }
-  db.prepare('DELETE FROM events WHERE id = ?').run(ev.id); // cascades to tiers, sections, seats, promos, orders, tickets
+  const proofs = db.prepare('SELECT proof FROM ticket_requests WHERE event_id = ? AND proof IS NOT NULL').all(ev.id).map((r) => r.proof);
+  db.prepare('DELETE FROM events WHERE id = ?').run(ev.id); // cascades to tiers, sections, seats, promos, orders, tickets, requests
+  for (const p of proofs) fs.rm(proofPath(p), { force: true }, () => {});
   for (const f of [ev.poster, ev.logo]) if (f) fs.rm(uploadPath(f), { force: true }, () => {});
   audit(req, 'delete', 'event', ev.id, { title: ev.title, ...counts });
   res.json({ ok: true, deleted: counts });

@@ -104,6 +104,16 @@ cd ~/seatko && git pull && sudo docker compose -f deploy/docker-compose.yml up -
 
 Back up the database with `sudo docker cp seatko-api:/app/api/data ./seatko-backup`.
 
+## Online ticket requests (pay first, approve, then tickets)
+
+With **Branding & settings → Online ticket requests** on, the website embed's *Get tickets* window becomes a form: the buyer picks tickets, enters name, email and mobile number, the payment method and reference, and uploads a screenshot of the payment.
+
+- The request lands in the event's **Requests** tab (with a count on the tab and in the events list). **No seat is held** while it is pending.
+- Staff open it, compare the screenshot with their GCash/bank, and **Approve**: SeatKo pre-selects adjacent available seats in the requested tier (changeable on the seat map), issues the tickets and emails them to the buyer. **Reject** emails the buyer the reason.
+- The buyer gets a "we received your request" email right away.
+- Optional: every request is also logged to a **Google Sheet** and updated on approval or rejection. Paste the script from `deploy/google-sheet-apps-script.js` into the sheet's Apps Script, deploy it as a web app, and put its URL in the same settings card (step-by-step instructions are shown there).
+- Proof screenshots are private (staff only). Submissions are limited to 5 per visitor per 10 minutes.
+
 ## Show tickets on an organizer's website
 
 The API serves an embed script that shows live prices, "X left" / sold-out status, a buy button and a "View my ticket" lookup on any website. For example, add it to the `#concert` section of the POIMEN site:

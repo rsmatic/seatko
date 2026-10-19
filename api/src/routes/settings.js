@@ -6,6 +6,7 @@ import { requireAuth, requireOrg, requireRole } from '../auth.js';
 import { upload } from '../upload.js';
 import { config } from '../config.js';
 import { mailEnabled } from '../mailer.js';
+import { isSheetUrl } from '../sheets.js';
 import { h, str, color, bad } from '../util.js';
 
 const r = Router();
@@ -32,7 +33,12 @@ r.get('/default-logo', (_req, res) => res.sendFile(config.defaultLogo));
 
 r.use(requireAuth, requireOrg);
 
-r.get('/', (req, res) => res.json(publicSettings(req.orgId)));
+r.get('/', (req, res) => {
+  const s = getSettings(req.orgId);
+  // The sheet URL works like a password, so only admins see it (and it is never in public responses).
+  const admin = req.user.is_superadmin || req.user.role === 'admin';
+  res.json({ ...publicSettings(req.orgId), online_requests: s.online_requests !== '0', ...(admin ? { sheet_webhook_url: s.sheet_webhook_url } : {}) });
+});
 
 const setSetting = db.prepare(`
   INSERT INTO org_settings (org_id, key, value) VALUES (?, ?, ?)
@@ -48,11 +54,17 @@ r.put('/', requireRole('admin'), h((req, res) => {
     ticket_accent: color(req.body.ticket_accent, 'Ticket accent'),
     ticket_footer: str(req.body.ticket_footer, 'Ticket footer', { max: 300 }),
     buy_instructions: str(req.body.buy_instructions, 'How to buy', { max: 2000 }),
+    online_requests: req.body.online_requests === undefined ? undefined : req.body.online_requests ? '1' : '0',
+    sheet_webhook_url: str(req.body.sheet_webhook_url, 'Google Sheet URL', { max: 300 }),
   };
+  if (fields.sheet_webhook_url && !isSheetUrl(fields.sheet_webhook_url)) {
+    throw bad('Paste the Apps Script web app URL; it looks like https://script.google.com/macros/s/…/exec');
+  }
   if (fields.currency && !/^[A-Z]{3}$/.test(fields.currency)) throw bad('Currency must be a 3-letter ISO code, e.g. PHP');
   for (const [k, v] of Object.entries(fields)) if (v !== undefined) setSetting.run(req.orgId, k, v);
-  audit(req, 'update', 'settings', null, fields);
-  res.json(publicSettings(req.orgId));
+  audit(req, 'update', 'settings', null, { ...fields, sheet_webhook_url: fields.sheet_webhook_url ? '(set)' : fields.sheet_webhook_url });
+  const s = getSettings(req.orgId);
+  res.json({ ...publicSettings(req.orgId), online_requests: s.online_requests !== '0', sheet_webhook_url: s.sheet_webhook_url });
 }));
 
 function removeOldLogo(orgId) {

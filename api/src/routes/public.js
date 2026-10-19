@@ -17,7 +17,7 @@ function publicEvent(ev) {
   const tiers = tierSummary(ev.id)
     .filter((t) => t.active)
     .map((t) => ({
-      name: t.name, description: t.description, price_cents: t.price_cents, color: t.color,
+      id: t.id, name: t.name, description: t.description, price_cents: t.price_cents, color: t.color,
       kind: t.kind, remaining: Math.max(0, t.total - t.sold),
     }));
   const s = getSettings(ev.org_id);
@@ -30,6 +30,8 @@ function publicEvent(ev) {
     // For the embed's "Get tickets" window.
     org_name: s.org_name,
     buy_instructions: s.buy_instructions,
+    // The embed shows a request form (with proof of payment upload) when this is on.
+    requests_enabled: s.online_requests !== '0' && ev.status === 'on_sale',
   };
 }
 

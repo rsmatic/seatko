@@ -10,10 +10,12 @@ import Orders from './event/Orders.jsx';
 import Tickets from './event/Tickets.jsx';
 import Promos from './event/Promos.jsx';
 import Reports from './event/Reports.jsx';
+import Requests from './event/Requests.jsx';
 
 const TABS = [
   { key: 'overview', label: 'Overview', component: Overview },
   { key: 'sell', label: 'Box office', component: BoxOffice, roles: SELL },
+  { key: 'requests', label: 'Requests', component: Requests, roles: SELL },
   { key: 'pricing', label: 'Pricing', component: Pricing, roles: MANAGE },
   { key: 'seating', label: 'Seat map', component: Seating, roles: MANAGE },
   { key: 'orders', label: 'Orders', component: Orders, roles: SELL },
@@ -42,7 +44,8 @@ export default function EventDetail() {
               <div className="muted">{event.artist} · {dateTime(event.starts_at)} · {event.venue || 'Venue TBA'}</div>
             </div>
           </div>
-          <Tabs tabs={tabs} value={active.key} onChange={(k) => nav(`/events/${id}/${k}`)} />
+          <Tabs value={active.key} onChange={(k) => nav(`/events/${id}/${k}`)}
+            tabs={tabs.map((t) => (t.key === 'requests' && event.summary.pending_requests ? { ...t, label: `Requests (${event.summary.pending_requests})` } : t))} />
           <Tab event={event} reloadEvent={state.reload} />
         </>
       )}

@@ -5,8 +5,10 @@
  *        data-buy-url="https://m.me/Poimenph"      (where buyers message you, e.g. your Messenger link)
  *        data-buy-label="Get tickets"></div>
  *
- * "Get tickets" opens a small window: the visitor picks tiers and quantities, reads your
- * "How to buy" instructions (Branding & settings), and sends a ready-made message via the buy URL.
+ * "Get tickets" opens a small window: the visitor picks tiers and quantities and reads your
+ * "How to buy" instructions (Branding & settings). With online requests on, they fill in their
+ * details and upload proof of payment for you to approve; otherwise they send a ready-made
+ * message via the buy URL.
  * Add data-buy-mode="link" to make the button go straight to the buy URL instead.
  *   <script src="https://YOUR-SEATKO-HOST/embed.js" defer></script>
  *
@@ -46,11 +48,12 @@
     '.seatko-step span{min-width:1.4rem;text-align:center;font-weight:600}',
     '.seatko-total{display:flex;justify-content:space-between;font-weight:700;font-size:1.05rem}',
     '.seatko-dlg label{font-size:.8rem;color:var(--muted,#9a9aa2);display:flex;flex-direction:column;gap:.3rem}',
-    '.seatko-dlg input,.seatko-dlg textarea{font:inherit;font-size:.9rem;color:var(--text,#ececec);background:transparent;border:1px solid var(--line,#2a2a2e);border-radius:8px;padding:.55rem .7rem}',
+    '.seatko-dlg input,.seatko-dlg textarea,.seatko-dlg select{font:inherit;font-size:.9rem;color:var(--text,#ececec);background:transparent;border:1px solid var(--line,#2a2a2e);border-radius:8px;padding:.55rem .7rem}',
     '.seatko-how{white-space:pre-wrap;background:rgba(255,255,255,.05);border-radius:8px;padding:.7rem .85rem;font-size:.9rem;line-height:1.5}',
     '.seatko-how strong{display:block;margin-bottom:.25rem}',
     '.seatko-dlg .seatko-actions .btn{flex:1;text-align:center;cursor:pointer;font:inherit}',
     '.seatko-dlg .seatko-actions .btn:disabled{opacity:.45;cursor:default}',
+    '.seatko-dlg select option{color:#111}',
     '.seatko-note{font-size:.8rem;color:var(--muted,#9a9aa2);text-align:center;margin:0}',
     // Host sites may only style <a class="btn">; keep the secondary <button> transparent like theirs.
     '.seatko-dlg .btn:not(.primary){background:transparent;color:inherit;border:1px solid var(--line,#2a2a2e)}',
@@ -111,9 +114,9 @@
       var actions = el('div', 'seatko-actions');
       if (ev.status === 'sold_out') actions.appendChild(el('p', 'seatko-status', 'Sold out. Thank you!'));
       else if (ev.status === 'closed') actions.appendChild(el('p', 'seatko-status', 'Ticket sales are closed.'));
-      else if (buyUrl) {
+      else if (buyUrl || ev.requests_enabled) {
         var a = el('a', 'btn primary', root.getAttribute('data-buy-label') || 'Get tickets');
-        a.href = buyUrl;
+        a.href = buyUrl || '#';
         a.target = '_blank';
         a.rel = 'noopener';
         var onSale = ev.tiers.some(function (t) { return t.remaining > 0; });
@@ -163,6 +166,189 @@
     try { return new URL(url).hostname; } catch (e) { return ''; }
   }
 
+  function howToBuy(form, ev) {
+    if (!ev.buy_instructions) return;
+    var how = el('div', 'seatko-how');
+    how.appendChild(el('strong', null, 'How to pay'));
+    how.appendChild(document.createTextNode(ev.buy_instructions));
+    form.appendChild(how);
+  }
+
+  function field(form, label, input) {
+    var l = el('label', null, label);
+    l.appendChild(input);
+    form.appendChild(l);
+    return input;
+  }
+
+  /** Message mode: build a message to send via Messenger (or copy). Returns the update callback. */
+  function messageForm(form, ev, buyUrl) {
+    var name = el('input');
+    name.autocomplete = 'name';
+    field(form, 'Your name (optional)', name);
+    howToBuy(form, ev);
+    var msg = el('textarea');
+    msg.rows = 6;
+    field(form, 'Your message', msg);
+
+    var isMessenger = /(^|\.)(m\.me|messenger\.com)$/i.test(hostOf(buyUrl));
+    var actions = el('div', 'seatko-actions');
+    var send = el('button', 'btn primary', isMessenger ? 'Send via Messenger' : 'Continue');
+    var copy = el('button', 'btn', 'Copy message');
+    send.type = copy.type = 'button';
+    actions.appendChild(send);
+    actions.appendChild(copy);
+    form.appendChild(actions);
+    var note = el('p', 'seatko-note', '');
+    form.appendChild(note);
+
+    var edited = false;
+    var last = { lines: [], sum: 0 };
+    msg.addEventListener('input', function () { edited = true; });
+    name.addEventListener('input', function () { render(); });
+
+    function render() {
+      send.disabled = !last.lines.length || !buyUrl;
+      if (edited) return;
+      msg.value = ['Hi ' + (ev.org_name || 'there') + '! I would like to buy tickets for ' + ev.title + ' on ' + when(ev, false) + ':']
+        .concat(last.lines.length ? last.lines : ['- (choose your tickets above)'])
+        .concat(last.lines.length ? ['Total: ' + money(last.sum, ev.currency)] : [])
+        .concat(name.value.trim() ? ['Name: ' + name.value.trim()] : [])
+        .concat(['', 'How can I pay?'])
+        .join('\n');
+    }
+
+    send.addEventListener('click', function () {
+      var text = msg.value;
+      copyText(text);
+      var url = buyUrl;
+      // Messenger may pre-fill the text; if it doesn't, the message is already on the clipboard.
+      if (isMessenger) url += (url.indexOf('?') < 0 ? '?' : '&') + 'text=' + encodeURIComponent(text);
+      window.open(url, '_blank', 'noopener');
+      note.textContent = 'Your message was copied. If Messenger opens empty, just paste it and send.';
+    });
+    copy.addEventListener('click', function () {
+      copyText(msg.value).then(function () { note.textContent = 'Message copied.'; });
+    });
+
+    return function (lines, sum) { last = { lines: lines, sum: sum }; render(); };
+  }
+
+  /** Request mode: buyer details + proof of payment, sent to SeatKo for the organizer to approve. */
+  function requestForm(form, ev, buyUrl) {
+    howToBuy(form, ev);
+    var name = field(form, 'Full name *', el('input'));
+    name.autocomplete = 'name';
+    var email = field(form, 'Email * (your tickets will be sent here)', el('input'));
+    email.type = 'email';
+    email.autocomplete = 'email';
+    var phone = field(form, 'Mobile number *', el('input'));
+    phone.type = 'tel';
+    phone.autocomplete = 'tel';
+    var method = el('select');
+    [['gcash', 'GCash'], ['maya', 'Maya'], ['bank_transfer', 'Bank transfer'], ['other', 'Other']].forEach(function (m) {
+      var o = el('option', null, m[1]);
+      o.value = m[0];
+      method.appendChild(o);
+    });
+    field(form, 'Paid via *', method);
+    var ref = field(form, 'Reference number', el('input'));
+    var proof = el('input');
+    proof.type = 'file';
+    proof.accept = 'image/png,image/jpeg,image/webp';
+    field(form, 'Screenshot of your payment *', proof);
+    var note = field(form, 'Note (optional)', el('input'));
+    // Honeypot: hidden from people, often filled in by spam bots.
+    var trap = el('input');
+    trap.name = 'website';
+    trap.tabIndex = -1;
+    trap.autocomplete = 'off';
+    trap.setAttribute('aria-hidden', 'true');
+    trap.style.cssText = 'position:absolute;left:-9999px;width:1px;height:1px;opacity:0';
+    form.appendChild(trap);
+
+    var actions = el('div', 'seatko-actions');
+    var submit = el('button', 'btn primary', 'Submit request');
+    submit.type = 'button';
+    actions.appendChild(submit);
+    form.appendChild(actions);
+    var status = el('p', 'seatko-note', 'No seat is reserved until your payment is confirmed. Your tickets will be emailed to you.');
+    form.appendChild(status);
+    if (buyUrl) {
+      var ask = el('a', 'seatko-note', 'Questions? Message us');
+      ask.href = buyUrl;
+      ask.target = '_blank';
+      ask.rel = 'noopener';
+      ask.style.display = 'block';
+      ask.style.color = 'var(--accent,#d9b56c)';
+      form.appendChild(ask);
+    }
+
+    var items = [];
+    var hint = status.textContent;
+    function fail(msg) {
+      status.textContent = msg;
+      status.style.color = '#ff8a80';
+    }
+    // Clear an error as soon as the visitor starts fixing it.
+    form.addEventListener('input', function () {
+      if (submit.disabled && submit.textContent !== 'Submit request') return;
+      status.textContent = hint;
+      status.style.color = '';
+    });
+
+    submit.addEventListener('click', function () {
+      if (!items.length) return fail('Choose your tickets above.');
+      if (!name.value.trim()) return fail('Please enter your full name.');
+      if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(email.value.trim())) return fail('Please enter a valid email address.');
+      if (!phone.value.trim()) return fail('Please enter your mobile number.');
+      if (!proof.files[0]) return fail('Please attach a screenshot of your payment.');
+      if (proof.files[0].size > 5 * 1024 * 1024) return fail('The screenshot is too large (max 5 MB).');
+
+      var fd = new FormData();
+      fd.append('buyer_name', name.value.trim());
+      fd.append('buyer_email', email.value.trim());
+      fd.append('buyer_phone', phone.value.trim());
+      fd.append('payment_method', method.value);
+      fd.append('payment_ref', ref.value.trim());
+      fd.append('note', note.value.trim());
+      fd.append('website', trap.value);
+      fd.append('items', JSON.stringify(items));
+      fd.append('proof', proof.files[0]);
+
+      submit.disabled = true;
+      submit.textContent = 'Sending…';
+      status.style.color = '';
+      status.textContent = 'Uploading your request…';
+      fetch(base + '/api/public/events/' + encodeURIComponent(ev.id) + '/requests', { method: 'POST', body: fd })
+        .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+        .then(function (res) {
+          if (!res.ok) throw new Error(res.d.error || 'Something went wrong. Please try again.');
+          // Replace the form with a confirmation, keeping the close button.
+          var keep = form.firstChild;
+          form.innerHTML = '';
+          form.appendChild(keep);
+          form.appendChild(el('h3', null, 'Request received!'));
+          form.appendChild(el('p', null, 'Thank you, ' + name.value.trim() + '. We will check your payment of ' +
+            money(res.d.amount_cents, ev.currency) + ' and email your tickets to ' + res.d.email + '.'));
+          var refLine = el('p', 'seatko-note', 'Your reference: ' + res.d.reference);
+          refLine.style.fontWeight = '600';
+          form.appendChild(refLine);
+          form.appendChild(el('p', 'seatko-note', 'A confirmation email is on its way. Check your spam folder if you don\'t see it.'));
+        })
+        .catch(function (e) {
+          submit.disabled = false;
+          submit.textContent = 'Submit request';
+          fail(e.message || 'Could not send. Please check your connection and try again.');
+        });
+    });
+
+    return function (lines, sum, its) {
+      items = its;
+      submit.disabled = !its.length;
+    };
+  }
+
   /** "Get tickets" window: pick tiers, read how to pay, send a ready-made message. */
   function openBuyDialog(ev, buyUrl) {
     var qty = {};
@@ -170,6 +356,7 @@
     dlg.setAttribute('aria-label', 'Get tickets');
     var form = el('form');
     form.method = 'dialog';
+    form.addEventListener('submit', function (e) { e.preventDefault(); }); // Enter in a field must not close the window
     var close = el('button', 'seatko-x', '×');
     close.type = 'button';
     close.setAttribute('aria-label', 'Close');
@@ -220,71 +407,23 @@
     form.appendChild(list);
     form.appendChild(total);
 
-    var nameLabel = el('label', null, 'Your name (optional)');
-    var name = el('input');
-    name.autocomplete = 'name';
-    nameLabel.appendChild(name);
-    form.appendChild(nameLabel);
-
-    if (ev.buy_instructions) {
-      var how = el('div', 'seatko-how');
-      how.appendChild(el('strong', null, 'How to buy'));
-      how.appendChild(document.createTextNode(ev.buy_instructions));
-      form.appendChild(how);
-    }
-
-    var msgLabel = el('label', null, 'Your message');
-    var msg = el('textarea');
-    msg.rows = 6;
-    msgLabel.appendChild(msg);
-    form.appendChild(msgLabel);
-
-    var isMessenger = /(^|\.)(m\.me|messenger\.com)$/i.test(hostOf(buyUrl));
-    var actions = el('div', 'seatko-actions');
-    var send = el('button', 'btn primary', isMessenger ? 'Send via Messenger' : 'Continue');
-    var copy = el('button', 'btn', 'Copy message');
-    send.type = copy.type = 'button';
-    actions.appendChild(send);
-    actions.appendChild(copy);
-    form.appendChild(actions);
-    var note = el('p', 'seatko-note', '');
-    form.appendChild(note);
-
-    var edited = false;
-    msg.addEventListener('input', function () { edited = true; });
-    name.addEventListener('input', update);
+    // Two modes: a request form with proof of payment (when the organizer accepts online
+    // requests), or a ready-made message to send via the buy URL (e.g. Messenger).
+    var onChange = ev.requests_enabled ? requestForm(form, ev, buyUrl) : messageForm(form, ev, buyUrl);
 
     function update() {
       var lines = [];
+      var items = [];
       var sum = 0;
       ev.tiers.forEach(function (t, i) {
         if (!qty[i]) return;
         sum += qty[i] * t.price_cents;
         lines.push('- ' + qty[i] + ' × ' + t.name + ' (' + money(t.price_cents, ev.currency) + ' each)');
+        items.push({ tier_id: t.id, qty: qty[i] });
       });
       totalAmount.textContent = money(sum, ev.currency);
-      send.disabled = !lines.length;
-      if (edited) return;
-      msg.value = ['Hi ' + (ev.org_name || 'there') + '! I would like to buy tickets for ' + ev.title + ' on ' + when(ev, false) + ':']
-        .concat(lines.length ? lines : ['- (choose your tickets above)'])
-        .concat(lines.length ? ['Total: ' + money(sum, ev.currency)] : [])
-        .concat(name.value.trim() ? ['Name: ' + name.value.trim()] : [])
-        .concat(['', 'How can I pay?'])
-        .join('\n');
+      onChange(lines, sum, items);
     }
-
-    send.addEventListener('click', function () {
-      var text = msg.value;
-      copyText(text);
-      var url = buyUrl;
-      // Messenger may pre-fill the text; if it doesn't, the message is already on the clipboard.
-      if (isMessenger) url += (url.indexOf('?') < 0 ? '?' : '&') + 'text=' + encodeURIComponent(text);
-      window.open(url, '_blank', 'noopener');
-      note.textContent = 'Your message was copied. If Messenger opens empty, just paste it and send.';
-    });
-    copy.addEventListener('click', function () {
-      copyText(msg.value).then(function () { note.textContent = 'Message copied.'; });
-    });
 
     update();
     dlg.appendChild(form);

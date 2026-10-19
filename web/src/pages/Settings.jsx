@@ -3,6 +3,7 @@ import { api, assetUrl, API_BASE } from '../api.js';
 import { useAction, useApp } from '../state.jsx';
 import { Field, PageHeader, Spinner, confirmAction } from '../components/ui.jsx';
 import Ticket from '../components/Ticket.jsx';
+import sheetScript from '../../../deploy/google-sheet-apps-script.js?raw';
 
 export default function Settings() {
   const { settings } = useApp();
@@ -78,10 +79,51 @@ function SettingsForm() {
           <button className="btn btn-primary" disabled={busy}>Save settings</button>
         </form>
       </div>
+      <RequestsSettings />
       <section className="card">
         <h3>Ticket preview</h3>
         <Ticket t={preview} settings={{ ...settings, ...f }} />
       </section>
     </>
+  );
+}
+
+/** Website ticket requests (with proof of payment) and the optional Google Sheet log. */
+function RequestsSettings() {
+  const { settings, setSettings, toast } = useApp();
+  const [run, busy] = useAction();
+  const [enabled, setEnabled] = useState(!!settings.online_requests);
+  const [url, setUrl] = useState(settings.sheet_webhook_url ?? '');
+  const [showSetup, setShowSetup] = useState(false);
+  const save = async (e) => {
+    e.preventDefault();
+    setSettings(await run(() => api('/settings', { method: 'PUT', body: { online_requests: enabled, sheet_webhook_url: url.trim() } }), 'Saved'));
+  };
+  const copyScript = async () => {
+    try { await navigator.clipboard.writeText(sheetScript); toast('Script copied'); } catch { toast('Copy failed: select the script and copy it manually', 'error'); }
+  };
+  return (
+    <form className="card" onSubmit={save}>
+      <h3>Online ticket requests</h3>
+      <label className="check">
+        <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
+        <span>Let buyers request tickets from your website
+          <span className="field-hint"> · In the website's Get tickets window they choose tickets, fill in their details and upload proof of payment. You approve them in each event's Requests tab; seats are only assigned when you approve.</span>
+        </span>
+      </label>
+      <Field label="Google Sheet (optional)" hint="Every request is also added to this sheet, and updated when you approve or reject it.">
+        <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://script.google.com/macros/s/…/exec" spellCheck={false} />
+      </Field>
+      <button type="button" className="link small" onClick={() => setShowSetup(!showSetup)}>{showSetup ? 'Hide' : 'How to connect a Google Sheet'}</button>
+      {showSetup && (
+        <ol className="setup-steps small">
+          <li>Create a new Google Sheet. Open <strong>Extensions → Apps Script</strong>.</li>
+          <li>Delete the sample code, paste this script (<button type="button" className="link" onClick={copyScript}>copy script</button>), then click <strong>Save</strong>.</li>
+          <li>Click <strong>Deploy → New deployment</strong>, choose type <strong>Web app</strong>, set <em>Execute as: Me</em> and <em>Who has access: Anyone</em>, then <strong>Deploy</strong> and allow access.</li>
+          <li>Copy the <strong>Web app URL</strong> (it ends with <span className="mono">/exec</span>), paste it above and click <strong>Save</strong>.</li>
+        </ol>
+      )}
+      <div><button className="btn btn-primary mt" disabled={busy}>Save</button></div>
+    </form>
   );
 }

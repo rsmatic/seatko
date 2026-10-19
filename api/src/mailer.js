@@ -86,3 +86,55 @@ export function ticketEmail({ order, tickets, event, org }) {
 
   return { subject, html, text };
 }
+
+// ---------- online ticket request emails ----------
+
+function shell(org, inner, footer) {
+  const logo = org.logo ? `${config.apiUrl}/uploads/${encodeURIComponent(org.logo)}` : null;
+  return `<!doctype html><html><body style="margin:0;background:#f4f4f5;font-family:Arial,Helvetica,sans-serif">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:24px 12px"><tr><td align="center">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#fff;border-radius:12px;overflow:hidden">
+    <tr><td style="background:#111;padding:20px 24px;color:#fff">
+      ${logo ? `<img src="${esc(logo)}" width="40" height="40" alt="" style="border-radius:50%;vertical-align:middle;margin-right:10px">` : ''}
+      <span style="font-size:16px;font-weight:700;letter-spacing:2px;vertical-align:middle">${esc(org.org_name || 'SeatKo')}</span>
+    </td></tr>
+    <tr><td style="padding:24px;font-size:15px;color:#333;line-height:1.5">${inner}</td></tr>
+    <tr><td style="padding:14px 24px;background:#fafafa;font-size:12px;color:#888">${footer}</td></tr>
+  </table></td></tr></table></body></html>`;
+}
+
+const METHOD_LABEL = { gcash: 'GCash', maya: 'Maya', bank_transfer: 'bank transfer', other: 'other' };
+const methodLabel = (m) => METHOD_LABEL[m] ?? m;
+const requestLines = (req) => JSON.parse(req.items).map((i) => `${i.qty} × ${i.tier_name}`);
+const peso = (c) => `₱${(c / 100).toLocaleString('en-PH', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+
+/** Sent right after a buyer submits a request from the organizer's website. */
+export function requestReceivedEmail({ request, event, org }) {
+  const lines = requestLines(request);
+  const subject = `We received your ticket request for ${event.title}`;
+  const inner = `
+    <p style="margin:0 0 12px">Hi ${esc(request.buyer_name)},</p>
+    <p style="margin:0 0 12px">Thank you! We received your request and payment details for <strong>${esc(event.title)}</strong> (${esc(when(event))}).</p>
+    <p style="margin:0 0 4px"><strong>${lines.map(esc).join('<br>')}</strong></p>
+    <p style="margin:0 0 12px">Amount: ${esc(peso(request.amount_cents))} via ${esc(methodLabel(request.payment_method))}${request.payment_ref ? ` (ref. ${esc(request.payment_ref)})` : ''}</p>
+    <p style="margin:0">We'll check your payment and email your tickets with their QR codes to this address. Seats are assigned once the payment is confirmed.</p>`;
+  const footer = `Request ${esc(request.reference)} · Sent by SeatKo for ${esc(org.org_name || 'the organizer')}. Reply to this email if you have questions.`;
+  const text = [`Hi ${request.buyer_name},`, '', `We received your ticket request for ${event.title} (${when(event)}):`, ...lines,
+    `Amount: ${peso(request.amount_cents)} via ${methodLabel(request.payment_method)}${request.payment_ref ? ` (ref. ${request.payment_ref})` : ''}`, '',
+    "We'll check your payment and email your tickets once it is confirmed.", `Request ${request.reference}`].join('\n');
+  return { subject, html: shell(org, inner, footer), text };
+}
+
+/** Sent when the organizer can't confirm a request's payment. */
+export function requestRejectedEmail({ request, event, org, reason }) {
+  const subject = `About your ticket request for ${event.title}`;
+  const inner = `
+    <p style="margin:0 0 12px">Hi ${esc(request.buyer_name)},</p>
+    <p style="margin:0 0 12px">We couldn't confirm your ticket request for <strong>${esc(event.title)}</strong> (${esc(requestLines(request).join(', '))}).</p>
+    ${reason ? `<p style="margin:0 0 12px;padding:10px 12px;background:#fff4f4;border-left:3px solid #d23f3f">${esc(reason)}</p>` : ''}
+    <p style="margin:0">Please reply to this email or message us so we can sort it out.</p>`;
+  const footer = `Request ${esc(request.reference)} · Sent by SeatKo for ${esc(org.org_name || 'the organizer')}.`;
+  const text = [`Hi ${request.buyer_name},`, '', `We couldn't confirm your ticket request for ${event.title}.`, reason ? `Reason: ${reason}` : '',
+    'Please reply to this email so we can sort it out.', `Request ${request.reference}`].filter((l) => l !== null).join('\n');
+  return { subject, html: shell(org, inner, footer), text };
+}

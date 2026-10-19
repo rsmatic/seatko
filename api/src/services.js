@@ -34,6 +34,7 @@ export function eventSummary(eventId) {
     capacity: tiers.reduce((a, t) => a + t.total, 0),
     sold: tiers.reduce((a, t) => a + t.sold, 0),
     checked_in: tiers.reduce((a, t) => a + t.checked_in, 0),
+    pending_requests: db.prepare("SELECT COUNT(*) n FROM ticket_requests WHERE event_id = ? AND status = 'pending'").get(eventId).n,
     ...money,
   };
 }

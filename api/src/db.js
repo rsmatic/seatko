@@ -157,6 +157,33 @@ if (!hasColumn('sections', 'pos_x')) {
   db.exec('ALTER TABLE sections ADD COLUMN pos_y REAL');
   db.exec('ALTER TABLE sections ADD COLUMN angle REAL NOT NULL DEFAULT 0');
 }
+// Online ticket requests from an organizer's website: the buyer pays first and uploads proof;
+// staff verify it, then seats are assigned and tickets issued. Nothing is held while pending.
+db.exec(`
+CREATE TABLE IF NOT EXISTS ticket_requests (
+  id             INTEGER PRIMARY KEY,
+  org_id         INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  event_id       INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+  reference      TEXT NOT NULL UNIQUE,
+  buyer_name     TEXT NOT NULL,
+  buyer_email    TEXT NOT NULL,
+  buyer_phone    TEXT NOT NULL DEFAULT '',
+  payment_method TEXT NOT NULL,
+  payment_ref    TEXT NOT NULL DEFAULT '',
+  items          TEXT NOT NULL,              -- JSON: [{ tier_id, tier_name, kind, qty, price_cents }]
+  amount_cents   INTEGER NOT NULL,           -- total at the prices shown when the request was made
+  proof          TEXT,
+  note           TEXT NOT NULL DEFAULT '',
+  status         TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
+  review_note    TEXT NOT NULL DEFAULT '',
+  order_id       INTEGER REFERENCES orders(id) ON DELETE SET NULL,
+  reviewed_by    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  reviewed_at    TEXT,
+  created_at     TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_requests_event ON ticket_requests(event_id, status);
+`);
+
 if (!hasColumn('orders', 'emailed_at')) {
   // Last time the order's tickets were emailed to the buyer, and to which address.
   db.exec('ALTER TABLE orders ADD COLUMN emailed_at TEXT');
@@ -267,6 +294,10 @@ export const DEFAULT_ORG_SETTINGS = {
   ticket_footer: 'Present this QR code at the entrance. One scan per ticket.',
   // Shown on the organizer's website when a visitor clicks "Get tickets".
   buy_instructions: '',
+  // Accept ticket requests (with proof of payment) from the website embed. '1' = on.
+  online_requests: '1',
+  // Optional Google Apps Script web app URL that logs requests to a Google Sheet.
+  sheet_webhook_url: '',
 };
 
 export function initOrgSettings(orgId, overrides = {}) {

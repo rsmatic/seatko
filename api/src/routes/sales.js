@@ -79,19 +79,29 @@ r.post('/events/:id/quote', requireRole(...SELL), h((req, res) => {
 
 r.post('/events/:id/orders', requireRole(...SELL), h((req, res) => {
   const ev = eventFor(req, req.params.id);
-  const buyerName = str(req.body.buyer_name, 'Buyer name', { required: true, max: 200 });
-  const buyerEmail = str(req.body.buyer_email, 'Buyer email', { max: 200 }) ?? '';
+  const orderId = createOrder(req, ev, req.body);
+  audit(req, 'sell', 'order', orderId, { event: ev.id });
+  res.status(201).json(loadOrder(orderId, req.orgId));
+}));
+
+/**
+ * Validate and record a sale: marks seats sold, issues tickets, charges SeatKo fees.
+ * Used by the box office and when approving an online ticket request. Returns the order id.
+ */
+export function createOrder(req, ev, body) {
+  const buyerName = str(body.buyer_name, 'Buyer name', { required: true, max: 200 });
+  const buyerEmail = str(body.buyer_email, 'Buyer email', { max: 200 }) ?? '';
   if (buyerEmail && !isEmail(buyerEmail)) throw bad('Buyer email looks invalid');
-  const buyerPhone = str(req.body.buyer_phone, 'Buyer phone', { max: 50 }) ?? '';
-  const method = oneOf(req.body.payment_method, 'Payment method', PAYMENT_METHODS, { required: true });
-  const paymentRef = str(req.body.payment_ref, 'Payment reference', { max: 200 }) ?? '';
-  const notes = str(req.body.notes, 'Notes', { max: 1000 }) ?? '';
-  const holders = Array.isArray(req.body.holder_names) ? req.body.holder_names : [];
+  const buyerPhone = str(body.buyer_phone, 'Buyer phone', { max: 50 }) ?? '';
+  const method = oneOf(body.payment_method, 'Payment method', PAYMENT_METHODS, { required: true });
+  const paymentRef = str(body.payment_ref, 'Payment reference', { max: 200 }) ?? '';
+  const notes = str(body.notes, 'Notes', { max: 1000 }) ?? '';
+  const holders = Array.isArray(body.holder_names) ? body.holder_names : [];
   if (method === 'comp' && !MANAGE.includes(req.user.role)) throw new HttpError(403, 'Only managers can issue complimentary tickets');
   assertSellable(ev, method);
 
   const orderId = db.transaction(() => {
-    const cart = priceCart(ev, req.body, req.user);
+    const cart = priceCart(ev, body, req.user);
     let ref;
     do ref = orderRef(); while (db.prepare('SELECT 1 FROM orders WHERE reference = ?').get(ref));
 
@@ -120,11 +130,10 @@ r.post('/events/:id/orders', requireRole(...SELL), h((req, res) => {
   })();
 
   refreshSoldOut(ev.id);
-  audit(req, 'sell', 'order', orderId, { event: ev.id });
-  res.status(201).json(loadOrder(orderId, req.orgId));
-}));
+  return orderId;
+}
 
-function loadOrder(id, orgId, user) {
+export function loadOrder(id, orgId, user) {
   const order = db.prepare(`
     SELECT o.*, u.name AS created_by_name, p.code AS promo_code, e.title AS event_title
     FROM orders o LEFT JOIN users u ON u.id = o.created_by LEFT JOIN promo_codes p ON p.id = o.promo_code_id
@@ -153,15 +162,19 @@ r.get('/orders/:id', requireRole(...SELL), h((req, res) => res.json(loadOrder(re
 // Email the order's tickets (links to their QR pages) to the buyer, or to another address.
 r.post('/orders/:id/email', requireRole(...SELL), h(async (req, res) => {
   const order = loadOrder(req.params.id, req.orgId, req.user);
-  const to = String(req.body.email ?? order.buyer_email ?? '').trim();
+  await emailOrder(req, order, String(req.body.email ?? order.buyer_email ?? '').trim());
+  res.json(loadOrder(order.id, req.orgId, req.user));
+}));
+
+/** Email an order's valid tickets (links to their QR pages) and record when and where it went. */
+export async function emailOrder(req, order, to) {
   if (!isEmail(to)) throw bad('Enter a valid email address');
   const tickets = order.tickets.filter((t) => t.status !== 'void');
   if (!tickets.length) throw bad('This order has no valid tickets to send');
   const event = db.prepare('SELECT * FROM events WHERE id = ?').get(order.event_id);
   const org = getSettings(req.orgId);
-  const { contact_email: replyTo } = db.prepare('SELECT contact_email FROM organizations WHERE id = ?').get(req.orgId);
   try {
-    await sendMail({ to, replyTo: isEmail(replyTo) ? replyTo : undefined, ...ticketEmail({ order, tickets, event, org }) });
+    await sendMail({ to, replyTo: orgReplyTo(req.orgId), ...ticketEmail({ order, tickets, event, org }) });
   } catch (e) {
     if (e instanceof HttpError) throw e;
     console.error('ticket email failed', e);
@@ -170,8 +183,13 @@ r.post('/orders/:id/email', requireRole(...SELL), h(async (req, res) => {
   db.prepare("UPDATE orders SET emailed_at = datetime('now'), emailed_to = ?, buyer_email = CASE WHEN buyer_email = '' THEN ? ELSE buyer_email END WHERE id = ?")
     .run(to, to, order.id);
   audit(req, 'email_tickets', 'order', order.id, { to, tickets: tickets.length });
-  res.json(loadOrder(order.id, req.orgId, req.user));
-}));
+}
+
+/** Replies to SeatKo emails go to the organizer's contact address when one is set. */
+export function orgReplyTo(orgId) {
+  const { contact_email: email } = db.prepare('SELECT contact_email FROM organizations WHERE id = ?').get(orgId);
+  return isEmail(email) ? email : undefined;
+}
 
 function releaseTicket(ticket) {
   db.prepare("UPDATE tickets SET status = 'void' WHERE id = ?").run(ticket.id);
