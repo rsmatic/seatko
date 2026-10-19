@@ -47,6 +47,8 @@ export function pushToSheet(requestId) {
     ticket_codes: tickets.map((t) => t.code).join(', '),
     order: r.order_reference ?? '',
     seatko_link: `${config.appUrl}/events/${r.event_id}/requests?request=${r.id}`,
+    // Opens the payment screenshot in SeatKo (sign-in required).
+    proof_link: r.proof ? `${config.appUrl}/requests/${r.id}/proof` : '',
   };
 
   fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(row), redirect: 'follow' })

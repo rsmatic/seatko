@@ -14,6 +14,7 @@ import Settings from './pages/Settings.jsx';
 import Activity from './pages/Activity.jsx';
 import Profile from './pages/Profile.jsx';
 import Billing from './pages/Billing.jsx';
+import ProofPage from './pages/ProofPage.jsx';
 import { Privacy, Terms } from './pages/Legal.jsx';
 import PlatformHome from './pages/platform/PlatformHome.jsx';
 import OrgDetail from './pages/platform/OrgDetail.jsx';
@@ -27,7 +28,8 @@ function Protected({ roles, children }) {
   const { user, booting, can } = useApp();
   const loc = useLocation();
   if (booting) return <Spinner />;
-  if (!user) return <Navigate to="/login" state={{ from: loc.pathname }} replace />;
+  // Keep the query string so links like ?request=12 still open the right thing after signing in.
+  if (!user) return <Navigate to="/login" state={{ from: loc.pathname + loc.search }} replace />;
   if (roles && !can(...roles)) return <Navigate to="/" replace />;
   return children;
 }
@@ -74,6 +76,7 @@ export default function App() {
           <Route path="events/:id" element={<EventDetail />} />
           <Route path="events/:id/:tab" element={<EventDetail />} />
           <Route path="tickets/:code" element={<TicketPage />} />
+          <Route path="requests/:id/proof" element={<ProofPage />} />
           <Route path="checkin" element={<Protected roles={SCAN}><Suspense fallback={<Spinner />}><CheckIn /></Suspense></Protected>} />
           <Route path="users" element={<Protected roles={['admin']}><Users /></Protected>} />
           <Route path="settings" element={<Protected roles={['admin']}><Settings /></Protected>} />

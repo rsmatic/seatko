@@ -415,3 +415,5 @@ dl.details dd { margin: 0; }
 .review-total { display: flex; justify-content: space-between; gap: 1rem; margin-top: 1rem; padding: .7rem .9rem; border-radius: 8px; background: var(--surface-2); }
 .review-total.warn { outline: 1px solid var(--warn); }
 .review-warn { color: var(--warn); margin-top: .4rem; }
+.proof-page { display: flex; justify-content: center; }
+.proof-page .proof-thumb { max-height: none; max-width: min(100%, 520px); }
