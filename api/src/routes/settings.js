@@ -7,6 +7,7 @@ import { upload } from '../upload.js';
 import { config } from '../config.js';
 import { mailEnabled } from '../mailer.js';
 import { isSheetUrl } from '../sheets.js';
+import { REQUEST_METHODS, requestMethods } from './requests.js';
 import { h, str, color, bad } from '../util.js';
 
 const r = Router();
@@ -37,7 +38,7 @@ r.get('/', (req, res) => {
   const s = getSettings(req.orgId);
   // The sheet URL works like a password, so only admins see it (and it is never in public responses).
   const admin = req.user.is_superadmin || req.user.role === 'admin';
-  res.json({ ...publicSettings(req.orgId), online_requests: s.online_requests !== '0', ...(admin ? { sheet_webhook_url: s.sheet_webhook_url } : {}) });
+  res.json({ ...publicSettings(req.orgId), online_requests: s.online_requests !== '0', request_methods: requestMethods(req.orgId), ...(admin ? { sheet_webhook_url: s.sheet_webhook_url } : {}) });
 });
 
 const setSetting = db.prepare(`
@@ -56,7 +57,10 @@ r.put('/', requireRole('admin'), h((req, res) => {
     buy_instructions: str(req.body.buy_instructions, 'How to buy', { max: 2000 }),
     online_requests: req.body.online_requests === undefined ? undefined : req.body.online_requests ? '1' : '0',
     sheet_webhook_url: str(req.body.sheet_webhook_url, 'Google Sheet URL', { max: 300 }),
+    request_methods: req.body.request_methods === undefined ? undefined
+      : [...new Set([].concat(req.body.request_methods))].filter((m) => REQUEST_METHODS.includes(m)).join(','),
   };
+  if (fields.request_methods === '') throw bad('Choose at least one payment method');
   if (fields.sheet_webhook_url && !isSheetUrl(fields.sheet_webhook_url)) {
     throw bad('Paste the Apps Script web app URL; it looks like https://script.google.com/macros/s/…/exec');
   }
@@ -64,7 +68,7 @@ r.put('/', requireRole('admin'), h((req, res) => {
   for (const [k, v] of Object.entries(fields)) if (v !== undefined) setSetting.run(req.orgId, k, v);
   audit(req, 'update', 'settings', null, { ...fields, sheet_webhook_url: fields.sheet_webhook_url ? '(set)' : fields.sheet_webhook_url });
   const s = getSettings(req.orgId);
-  res.json({ ...publicSettings(req.orgId), online_requests: s.online_requests !== '0', sheet_webhook_url: s.sheet_webhook_url });
+  res.json({ ...publicSettings(req.orgId), online_requests: s.online_requests !== '0', request_methods: requestMethods(req.orgId), sheet_webhook_url: s.sheet_webhook_url });
 }));
 
 function removeOldLogo(orgId) {

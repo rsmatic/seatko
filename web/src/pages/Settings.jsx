@@ -94,10 +94,16 @@ function RequestsSettings() {
   const [run, busy] = useAction();
   const [enabled, setEnabled] = useState(!!settings.online_requests);
   const [url, setUrl] = useState(settings.sheet_webhook_url ?? '');
+  const [methods, setMethods] = useState(new Set(settings.request_methods ?? ['gcash']));
+  const toggleMethod = (m) => {
+    const next = new Set(methods);
+    if (next.has(m)) next.delete(m); else next.add(m);
+    setMethods(next);
+  };
   const [showSetup, setShowSetup] = useState(false);
   const save = async (e) => {
     e.preventDefault();
-    setSettings(await run(() => api('/settings', { method: 'PUT', body: { online_requests: enabled, sheet_webhook_url: url.trim() } }), 'Saved'));
+    setSettings(await run(() => api('/settings', { method: 'PUT', body: { online_requests: enabled, sheet_webhook_url: url.trim(), request_methods: [...methods] } }), 'Saved'));
   };
   const copyScript = async () => {
     try { await navigator.clipboard.writeText(sheetScript); toast('Script copied'); } catch { toast('Copy failed: select the script and copy it manually', 'error'); }
@@ -111,6 +117,15 @@ function RequestsSettings() {
           <span className="field-hint"> · In the website's Get tickets window they choose tickets, fill in their details and upload proof of payment. You approve them in each event's Requests tab; seats are only assigned when you approve.</span>
         </span>
       </label>
+      <div className="field">
+        <span className="field-label">Payment methods buyers can choose</span>
+        <div className="seg">
+          {[['gcash', 'GCash'], ['maya', 'Maya'], ['bank_transfer', 'Bank transfer'], ['other', 'Other']].map(([k, v]) => (
+            <label key={k}><input type="checkbox" checked={methods.has(k)} onChange={() => toggleMethod(k)} /> {v}</label>
+          ))}
+        </div>
+        <span className="field-hint">With only one checked, buyers see it fixed instead of a choice.</span>
+      </div>
       <Field label="Google Sheet (optional)" hint="Every request is also added to this sheet, and updated when you approve or reject it.">
         <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://script.google.com/macros/s/…/exec" spellCheck={false} />
       </Field>
@@ -123,7 +138,7 @@ function RequestsSettings() {
           <li>Copy the <strong>Web app URL</strong> (it ends with <span className="mono">/exec</span>), paste it above and click <strong>Save</strong>.</li>
         </ol>
       )}
-      <div><button className="btn btn-primary mt" disabled={busy}>Save</button></div>
+      <div><button className="btn btn-primary mt" disabled={busy || !methods.size}>Save</button></div>
     </form>
   );
 }

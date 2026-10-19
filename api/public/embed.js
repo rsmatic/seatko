@@ -54,6 +54,7 @@
     '.seatko-dlg .seatko-actions .btn{flex:1;text-align:center;cursor:pointer;font:inherit}',
     '.seatko-dlg .seatko-actions .btn:disabled{opacity:.45;cursor:default}',
     '.seatko-dlg select option{color:#111}',
+    '.seatko-fixed{font-size:.95rem;font-weight:600;color:var(--text,#ececec);padding:.55rem .7rem;border:1px solid var(--line,#2a2a2e);border-radius:8px;background:rgba(255,255,255,.04)}',
     '.seatko-note{font-size:.8rem;color:var(--muted,#9a9aa2);text-align:center;margin:0}',
     // Host sites may only style <a class="btn">; keep the secondary <button> transparent like theirs.
     '.seatko-dlg .btn:not(.primary){background:transparent;color:inherit;border:1px solid var(--line,#2a2a2e)}',
@@ -245,13 +246,23 @@
     var phone = field(form, 'Mobile number *', el('input'));
     phone.type = 'tel';
     phone.autocomplete = 'tel';
-    var method = el('select');
-    [['gcash', 'GCash'], ['maya', 'Maya'], ['bank_transfer', 'Bank transfer'], ['other', 'Other']].forEach(function (m) {
-      var o = el('option', null, m[1]);
-      o.value = m[0];
-      method.appendChild(o);
-    });
-    field(form, 'Paid via *', method);
+    var LABELS = { gcash: 'GCash', maya: 'Maya', bank_transfer: 'Bank transfer', other: 'Other' };
+    var methods = (ev.payment_methods && ev.payment_methods.length ? ev.payment_methods : ['gcash', 'maya', 'bank_transfer', 'other']);
+    var method;
+    if (methods.length === 1) {
+      // Only one accepted method: show it as fixed text instead of a choice.
+      method = { value: methods[0] };
+      var fixed = el('div', 'seatko-fixed', LABELS[methods[0]] || methods[0]);
+      field(form, 'Paid via', fixed);
+    } else {
+      method = el('select');
+      methods.forEach(function (m) {
+        var o = el('option', null, LABELS[m] || m);
+        o.value = m;
+        method.appendChild(o);
+      });
+      field(form, 'Paid via *', method);
+    }
     var ref = field(form, 'Reference number', el('input'));
     var proof = el('input');
     proof.type = 'file';

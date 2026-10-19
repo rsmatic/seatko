@@ -2,6 +2,7 @@ import { Router } from 'express';
 import cors from 'cors';
 import { db, getSettings } from '../db.js';
 import { publicSettings } from './settings.js';
+import { requestMethods } from './requests.js';
 import { qrSvg } from '../qr.js';
 import { tierSummary } from '../services.js';
 import { h, notFound, int, color } from '../util.js';
@@ -32,6 +33,7 @@ function publicEvent(ev) {
     buy_instructions: s.buy_instructions,
     // The embed shows a request form (with proof of payment upload) when this is on.
     requests_enabled: s.online_requests !== '0' && ev.status === 'on_sale',
+    payment_methods: requestMethods(ev.org_id),
   };
 }
 

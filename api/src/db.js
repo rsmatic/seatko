@@ -296,6 +296,8 @@ export const DEFAULT_ORG_SETTINGS = {
   buy_instructions: '',
   // Accept ticket requests (with proof of payment) from the website embed. '1' = on.
   online_requests: '1',
+  // Payment methods buyers may pick in website requests (comma-separated).
+  request_methods: 'gcash,maya,bank_transfer,other',
   // Optional Google Apps Script web app URL that logs requests to a Google Sheet.
   sheet_webhook_url: '',
 };

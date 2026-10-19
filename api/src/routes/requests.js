@@ -16,6 +16,12 @@ export const REQUEST_METHODS = ['gcash', 'maya', 'bank_transfer', 'other'];
 
 export const requestsEnabled = (orgId) => getSettings(orgId).online_requests !== '0';
 
+/** Payment methods this organizer accepts for website requests, in display order. */
+export function requestMethods(orgId) {
+  const allowed = String(getSettings(orgId).request_methods || '').split(',').filter((m) => REQUEST_METHODS.includes(m));
+  return allowed.length ? allowed : REQUEST_METHODS;
+}
+
 // ---------- public: submit a request ----------
 
 export const publicRequests = Router();
@@ -47,7 +53,7 @@ publicRequests.post('/events/:id/requests', uploadProof.single('proof'), h(async
     const email = str(req.body.buyer_email, 'Email', { required: true, max: 200 });
     if (!isEmail(email)) throw bad('Please enter a valid email address');
     const phone = str(req.body.buyer_phone, 'Phone number', { required: true, max: 50 });
-    const method = oneOf(req.body.payment_method, 'Payment method', REQUEST_METHODS, { required: true });
+    const method = oneOf(req.body.payment_method, 'Payment method', requestMethods(ev.org_id), { required: true });
     const paymentRef = str(req.body.payment_ref, 'Reference number', { max: 100 }) ?? '';
     const note = str(req.body.note, 'Note', { max: 500 }) ?? '';
     if (!req.file) throw bad('Please upload a screenshot or photo of your payment');
