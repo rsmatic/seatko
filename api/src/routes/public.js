@@ -31,6 +31,7 @@ function publicEvent(ev) {
     // For the embed's "Get tickets" window.
     org_name: s.org_name,
     buy_instructions: s.buy_instructions,
+    payment_qr_url: s.payment_qr ? `/uploads/${s.payment_qr}` : null,
     // The embed shows a request form (with proof of payment upload) when this is on.
     requests_enabled: s.online_requests !== '0' && ev.status === 'on_sale',
     payment_methods: requestMethods(ev.org_id),

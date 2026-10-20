@@ -51,6 +51,8 @@
     '.seatko-dlg input,.seatko-dlg textarea,.seatko-dlg select{font:inherit;font-size:.9rem;color:var(--text,#ececec);background:transparent;border:1px solid var(--line,#2a2a2e);border-radius:8px;padding:.55rem .7rem}',
     '.seatko-how{white-space:pre-wrap;background:rgba(255,255,255,.05);border-radius:8px;padding:.7rem .85rem;font-size:.9rem;line-height:1.5}',
     '.seatko-how strong{display:block;margin-bottom:.25rem}',
+    '.seatko-payqr{display:block;margin:.6rem auto .25rem;width:min(15rem,100%);height:auto;border-radius:8px;background:#fff}',
+    '.seatko-payqr-save{display:block;text-align:center;font-size:.8rem;color:var(--accent,#d9b56c)}',
     '.seatko-dlg .seatko-actions .btn{flex:1;text-align:center;cursor:pointer;font:inherit}',
     '.seatko-dlg .seatko-actions .btn:disabled{opacity:.45;cursor:default}',
     '.seatko-dlg select option{color:#111}',
@@ -168,10 +170,23 @@
   }
 
   function howToBuy(form, ev) {
-    if (!ev.buy_instructions) return;
+    if (!ev.buy_instructions && !ev.payment_qr_url) return;
     var how = el('div', 'seatko-how');
     how.appendChild(el('strong', null, 'How to pay'));
-    how.appendChild(document.createTextNode(ev.buy_instructions));
+    if (ev.buy_instructions) how.appendChild(document.createTextNode(ev.buy_instructions));
+    if (ev.payment_qr_url) {
+      // The organizer's payment QR (e.g. GCash). On a phone, buyers save it and upload it in their wallet app.
+      var src = base + ev.payment_qr_url;
+      var img = el('img', 'seatko-payqr');
+      img.src = src;
+      img.alt = 'Payment QR code';
+      how.appendChild(img);
+      var save = el('a', 'seatko-payqr-save', 'Open QR code (tap and hold to save)');
+      save.href = src;
+      save.target = '_blank';
+      save.rel = 'noopener';
+      how.appendChild(save);
+    }
     form.appendChild(how);
   }
 

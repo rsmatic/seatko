@@ -126,6 +126,7 @@ function RequestsSettings() {
         </div>
         <span className="field-hint">With only one checked, buyers see it fixed instead of a choice.</span>
       </div>
+      <PaymentQr />
       <Field label="Google Sheet (optional)" hint="Every request is also added to this sheet, and updated when you approve or reject it.">
         <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://script.google.com/macros/s/…/exec" spellCheck={false} />
       </Field>
@@ -140,5 +141,36 @@ function RequestsSettings() {
       )}
       <div><button className="btn btn-primary mt" disabled={busy || !methods.size}>Save</button></div>
     </form>
+  );
+}
+
+/** The QR code buyers scan to pay (e.g. GCash), shown in the website's Get tickets window. */
+function PaymentQr() {
+  const { settings, setSettings } = useApp();
+  const [run, busy] = useAction();
+  const fileRef = useRef(null);
+  const upload = async (file) => {
+    const fd = new FormData();
+    fd.append('qr', file);
+    setSettings(await run(() => api('/settings/payment-qr', { method: 'POST', body: fd }), 'Payment QR code saved. It now shows on your website.'));
+  };
+  const remove = async () => {
+    if (!confirmAction('Remove the payment QR code from your website?')) return;
+    setSettings(await run(() => api('/settings/payment-qr', { method: 'DELETE' }), 'Payment QR code removed'));
+  };
+  return (
+    <div className="field">
+      <span className="field-label">Payment QR code (optional)</span>
+      <div className="logo-row">
+        {settings.payment_qr_url && <img className="payqr-thumb" src={assetUrl(settings.payment_qr_url)} alt="Payment QR code" />}
+        <div className="btn-row">
+          <button type="button" className="btn" onClick={() => fileRef.current.click()} disabled={busy}>{settings.payment_qr_url ? 'Replace QR code' : 'Upload QR code'}</button>
+          {settings.payment_qr_url && <button type="button" className="btn" onClick={remove} disabled={busy}>Remove</button>}
+        </div>
+      </div>
+      <span className="field-hint">E.g. your GCash or Maya QR (screenshot from the app). Shown under "How to pay" in your website's Get tickets window so buyers can scan it. PNG, JPG or WEBP, max 5 MB.</span>
+      <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" hidden
+        onChange={(e) => { if (e.target.files[0]) upload(e.target.files[0]); e.target.value = ''; }} />
+    </div>
   );
 }

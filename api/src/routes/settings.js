@@ -25,6 +25,7 @@ export function publicSettings(orgId) {
     buy_instructions: s.buy_instructions,
     logo_url: s.logo ? `/uploads/${s.logo}` : '/api/settings/default-logo',
     has_custom_logo: !!s.logo,
+    payment_qr_url: s.payment_qr ? `/uploads/${s.payment_qr}` : null,
     email_enabled: mailEnabled(),
   };
 }
@@ -71,23 +72,40 @@ r.put('/', requireRole('admin'), h((req, res) => {
   res.json({ ...publicSettings(req.orgId), online_requests: s.online_requests !== '0', request_methods: requestMethods(req.orgId), sheet_webhook_url: s.sheet_webhook_url });
 }));
 
-function removeOldLogo(orgId) {
-  const { logo } = getSettings(orgId);
-  if (logo) fs.rm(path.join(config.uploadDir, path.basename(logo)), { force: true }, () => {});
+/** Deletes the file an image setting (logo, payment_qr) points to. */
+function removeOldImage(orgId, key) {
+  const file = getSettings(orgId)[key];
+  if (file) fs.rm(path.join(config.uploadDir, path.basename(file)), { force: true }, () => {});
 }
 
 r.post('/logo', requireRole('admin'), upload.single('logo'), h((req, res) => {
   if (!req.file) throw bad('Choose an image file to upload');
-  removeOldLogo(req.orgId);
+  removeOldImage(req.orgId, 'logo');
   setSetting.run(req.orgId, 'logo', req.file.filename);
   audit(req, 'replace_logo', 'settings', null, req.file.originalname);
   res.json(publicSettings(req.orgId));
 }));
 
 r.delete('/logo', requireRole('admin'), h((req, res) => {
-  removeOldLogo(req.orgId);
+  removeOldImage(req.orgId, 'logo');
   setSetting.run(req.orgId, 'logo', '');
   audit(req, 'reset_logo', 'settings');
+  res.json(publicSettings(req.orgId));
+}));
+
+// The QR code buyers scan to pay (e.g. a GCash or Maya QR), shown in the website's Get tickets window.
+r.post('/payment-qr', requireRole('admin'), upload.single('qr'), h((req, res) => {
+  if (!req.file) throw bad('Choose an image file to upload');
+  removeOldImage(req.orgId, 'payment_qr');
+  setSetting.run(req.orgId, 'payment_qr', req.file.filename);
+  audit(req, 'replace_payment_qr', 'settings', null, req.file.originalname);
+  res.json(publicSettings(req.orgId));
+}));
+
+r.delete('/payment-qr', requireRole('admin'), h((req, res) => {
+  removeOldImage(req.orgId, 'payment_qr');
+  setSetting.run(req.orgId, 'payment_qr', '');
+  audit(req, 'remove_payment_qr', 'settings');
   res.json(publicSettings(req.orgId));
 }));
 

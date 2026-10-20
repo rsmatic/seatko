@@ -281,6 +281,7 @@ dl.details dd { margin: 0; }
 .logo-row { display: flex; gap: 1.25rem; align-items: center; flex-wrap: wrap; }
 .qr-preview { width: 180px; height: 180px; border-radius: 10px; background: #fff; }
 .logo-thumb { width: 72px; height: 72px; border-radius: 50%; object-fit: cover; border: 1px solid var(--border); }
+.payqr-thumb { width: 120px; height: auto; border-radius: 8px; border: 1px solid var(--border); background: #fff; }
 .role-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: .75rem; margin-bottom: 1rem; }
 .role-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: .75rem 1rem; display: flex; flex-direction: column; gap: .35rem; align-items: flex-start; }
 

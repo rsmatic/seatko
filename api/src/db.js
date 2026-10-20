@@ -294,6 +294,8 @@ export const DEFAULT_ORG_SETTINGS = {
   ticket_footer: 'Present this QR code at the entrance. One scan per ticket.',
   // Shown on the organizer's website when a visitor clicks "Get tickets".
   buy_instructions: '',
+  // Optional payment QR code (e.g. GCash) image in /uploads, shown with the buy instructions.
+  payment_qr: '',
   // Accept ticket requests (with proof of payment) from the website embed. '1' = on.
   online_requests: '1',
   // Payment methods buyers may pick in website requests (comma-separated).
