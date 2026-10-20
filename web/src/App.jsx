@@ -15,6 +15,7 @@ import Activity from './pages/Activity.jsx';
 import Profile from './pages/Profile.jsx';
 import Billing from './pages/Billing.jsx';
 import ProofPage from './pages/ProofPage.jsx';
+import BuyerGuide from './pages/BuyerGuide.jsx';
 import { Privacy, Terms } from './pages/Legal.jsx';
 import PlatformHome from './pages/platform/PlatformHome.jsx';
 import OrgDetail from './pages/platform/OrgDetail.jsx';
@@ -74,6 +75,7 @@ export default function App() {
         <Route element={<OrgOnly />}>
           <Route path="events" element={<Events />} />
           <Route path="events/:id" element={<EventDetail />} />
+          <Route path="events/:id/banner" element={<Protected roles={MANAGE}><BuyerGuide /></Protected>} />
           <Route path="events/:id/:tab" element={<EventDetail />} />
           <Route path="tickets/:code" element={<TicketPage />} />
           <Route path="requests/:id/proof" element={<ProofPage />} />

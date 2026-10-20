@@ -32,6 +32,14 @@ app.use('/uploads', (_req, res, next) => {
   next();
 }, express.static(config.uploadDir, { maxAge: '1h' }));
 
+// Hosted ticket form (the website embed's Get tickets window, as a full page). The buyer's guide
+// banner links here, with ?onsite=1 for buyers at the venue who pay at the ticket booth.
+const buyPage = fs.readFileSync(path.join(config.root, 'public/buy.html'), 'utf8').replace('__APP_URL__', config.appUrl);
+app.get('/buy/:id', (_req, res) => {
+  res.setHeader('Cache-Control', 'public, max-age=300');
+  res.type('html').send(buyPage);
+});
+
 // Website embed script (see api/public/embed.js). Any site may load it.
 app.get('/embed.js', cors(), (_req, res) => {
   res.setHeader('Cache-Control', 'public, max-age=300');

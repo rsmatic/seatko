@@ -9,10 +9,13 @@ import { eventFor, tierSummary } from '../services.js';
 import { uploadProof, proofPath } from '../upload.js';
 import { isEmail, sendMail, requestReceivedEmail, requestRejectedEmail } from '../mailer.js';
 import { pushToSheet } from '../sheets.js';
-import { createOrder, emailOrder, loadOrder, orgReplyTo } from './sales.js';
+import { createOrder, emailOrder, loadOrder, orgReplyTo, PAYMENT_METHODS } from './sales.js';
 import { h, str, oneOf, bad, notFound, randomCode, HttpError } from '../util.js';
 
 export const REQUEST_METHODS = ['gcash', 'maya', 'bank_transfer', 'cash', 'other'];
+
+// What buyers who fill in the form at the venue can pay with at the ticket booth.
+export const ONSITE_METHODS = ['cash', 'gcash', 'maya'];
 
 export const requestsEnabled = (orgId) => getSettings(orgId).online_requests !== '0';
 
@@ -53,11 +56,14 @@ publicRequests.post('/events/:id/requests', uploadProof.single('proof'), h(async
     const email = str(req.body.buyer_email, 'Email', { required: true, max: 200 });
     if (!isEmail(email)) throw bad('Please enter a valid email address');
     const phone = str(req.body.buyer_phone, 'Phone number', { required: true, max: 50 });
-    const method = oneOf(req.body.payment_method, 'Payment method', requestMethods(ev.org_id), { required: true });
-    const paymentRef = str(req.body.payment_ref, 'Reference number', { max: 100 }) ?? '';
+    // On-site: the buyer filled in the form at the venue and pays at the ticket booth, so no proof yet.
+    const onsite = req.body.channel === 'onsite';
+    const method = oneOf(req.body.payment_method, 'Payment method', onsite ? ONSITE_METHODS : requestMethods(ev.org_id), { required: true });
+    const paymentRef = onsite ? '' : str(req.body.payment_ref, 'Reference number', { max: 100 }) ?? '';
     const note = str(req.body.note, 'Note', { max: 500 }) ?? '';
-    // Cash is paid in person, so there is no screenshot to upload.
-    if (!req.file && method !== 'cash') throw bad('Please upload a screenshot or photo of your payment');
+    // Cash is paid in person too, so there is no screenshot to upload.
+    const channel = onsite || method === 'cash' ? 'onsite' : 'online';
+    if (!req.file && channel === 'online') throw bad('Please upload a screenshot or photo of your payment');
 
     let wanted;
     try { wanted = JSON.parse(req.body.items || '[]'); } catch { wanted = null; }
@@ -81,9 +87,9 @@ publicRequests.post('/events/:id/requests', uploadProof.single('proof'), h(async
     let reference;
     do reference = `REQ-${randomCode(6)}`; while (db.prepare('SELECT 1 FROM ticket_requests WHERE reference = ?').get(reference));
     const { lastInsertRowid: id } = db.prepare(`
-      INSERT INTO ticket_requests (org_id, event_id, reference, buyer_name, buyer_email, buyer_phone, payment_method, payment_ref, items, amount_cents, proof, note)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(ev.org_id, ev.id, reference, name, email, phone, method, paymentRef, JSON.stringify(items), amount, req.file?.filename ?? null, note);
+      INSERT INTO ticket_requests (org_id, event_id, reference, buyer_name, buyer_email, buyer_phone, payment_method, payment_ref, items, amount_cents, proof, note, channel)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(ev.org_id, ev.id, reference, name, email, phone, method, paymentRef, JSON.stringify(items), amount, onsite ? null : req.file?.filename ?? null, note, channel);
     req.orgId = ev.org_id;
     audit(req, 'request_received', 'ticket_request', id, { reference, event: ev.id, tickets: count, amount_cents: amount });
 
@@ -91,7 +97,7 @@ publicRequests.post('/events/:id/requests', uploadProof.single('proof'), h(async
     sendMail({ to: email, replyTo: orgReplyTo(ev.org_id), ...requestReceivedEmail({ request, event: ev, org: getSettings(ev.org_id) }) })
       .catch((e) => console.error(`request ${reference}: confirmation email failed:`, e.message));
     pushToSheet(id);
-    res.status(201).json({ reference, amount_cents: amount, email });
+    res.status(201).json({ reference, amount_cents: amount, email, channel });
   } catch (e) {
     if (req.file) fs.rm(req.file.path, { force: true }, () => {});
     throw e;
@@ -117,12 +123,15 @@ function loadRequest(req, id) {
 staffRequests.get('/events/:id/requests', requireRole(...SELL), h((req, res) => {
   const ev = eventFor(req, req.params.id);
   const status = ['pending', 'approved', 'rejected'].includes(req.query.status) ? req.query.status : null;
+  const channel = ['online', 'onsite'].includes(req.query.channel) ? req.query.channel : null;
+  const q = req.query.q ? `%${req.query.q}%` : null;
   const rows = db.prepare(`
     SELECT q.*, u.name AS reviewed_by_name, o.reference AS order_reference
     FROM ticket_requests q LEFT JOIN users u ON u.id = q.reviewed_by LEFT JOIN orders o ON o.id = q.order_id
-    WHERE q.event_id = ? AND (? IS NULL OR q.status = ?)
+    WHERE q.event_id = @ev AND (@status IS NULL OR q.status = @status) AND (@channel IS NULL OR q.channel = @channel)
+      AND (@q IS NULL OR q.reference LIKE @q OR q.buyer_name LIKE @q OR q.buyer_email LIKE @q OR q.buyer_phone LIKE @q)
     ORDER BY CASE q.status WHEN 'pending' THEN 0 ELSE 1 END, q.id DESC LIMIT 500
-  `).all(ev.id, status, status);
+  `).all({ ev: ev.id, status, channel, q });
   res.json(rows.map((r) => ({ ...r, items: JSON.parse(r.items) })));
 }));
 
@@ -144,7 +153,10 @@ staffRequests.post('/requests/:id/approve', requireRole(...SELL), h(async (req, 
     const id = createOrder(req, ev, {
       seat_ids: req.body.seat_ids, ga: req.body.ga,
       buyer_name: r.buyer_name, buyer_email: r.buyer_email, buyer_phone: r.buyer_phone,
-      payment_method: r.payment_method, payment_ref: r.payment_ref,
+      // At the booth the buyer may pay differently than they said (e.g. GCash instead of cash).
+      payment_method: oneOf(req.body.payment_method, 'Payment method', PAYMENT_METHODS) ?? r.payment_method,
+      payment_ref: str(req.body.payment_ref, 'Payment reference', { max: 200 }) ?? r.payment_ref,
+      channel: r.channel,
       notes: [`Online request ${r.reference}`, r.note].filter(Boolean).join(' · '),
     });
     db.prepare(`

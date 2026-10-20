@@ -10,6 +10,6 @@ export default defineConfig({
   server: {
     port: 5173,
     // Use --host to open the scanner on a phone over the LAN (camera access needs HTTPS or localhost).
-    proxy: { '/api': api, '/uploads': api },
+    proxy: { '/api': api, '/uploads': api, '/buy': api, '/embed.js': api },
   },
 });

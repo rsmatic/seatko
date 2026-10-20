@@ -2,26 +2,32 @@ import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../../api.js';
 import { useAction, useApp, useLoad, MANAGE } from '../../state.jsx';
-import { dateTime, money, PAYMENT_LABEL } from '../../format.js';
+import { dateTime, money, PAYMENT_LABEL, CHANNEL_LABEL } from '../../format.js';
 import { Badge, Empty, Loadable, Modal, confirmAction } from '../../components/ui.jsx';
 import EmailTickets from '../../components/EmailTickets.jsx';
 
 export default function Orders({ event, reloadEvent }) {
   const [q, setQ] = useState('');
+  const [channel, setChannel] = useState('');
   const [params, setParams] = useSearchParams();
-  const state = useLoad(`/events/${event.id}/orders?q=${encodeURIComponent(q)}`);
+  const state = useLoad(`/events/${event.id}/orders?q=${encodeURIComponent(q)}&channel=${channel}`);
   const openId = params.get('order');
 
   return (
     <section className="card">
       <div className="filters">
         <input type="search" placeholder="Search reference, buyer, email, phone…" value={q} onChange={(e) => setQ(e.target.value)} />
+        <select value={channel} onChange={(e) => setChannel(e.target.value)}>
+          <option value="">Online &amp; on-site</option>
+          <option value="online">Online only</option>
+          <option value="onsite">On-site only</option>
+        </select>
       </div>
       <Loadable state={state}>
         {(orders) => !orders.length ? <Empty title="No orders found" /> : (
           <div className="table-wrap">
             <table>
-              <thead><tr><th>Reference</th><th>Buyer</th><th>Tickets</th><th>Payment</th><th className="num">Total</th><th>Status</th><th>Sold by</th><th>When</th></tr></thead>
+              <thead><tr><th>Reference</th><th>Buyer</th><th>Tickets</th><th>Payment</th><th>Sale type</th><th className="num">Total</th><th>Status</th><th>Sold by</th><th>When</th></tr></thead>
               <tbody>
                 {orders.map((o) => (
                   <tr key={o.id} className="clickable" onClick={() => setParams({ order: o.id })}>
@@ -29,6 +35,7 @@ export default function Orders({ event, reloadEvent }) {
                     <td>{o.buyer_name}<div className="muted small">{o.buyer_email || o.buyer_phone}</div></td>
                     <td>{o.ticket_count}</td>
                     <td>{PAYMENT_LABEL[o.payment_method]}{o.payment_ref && <div className="muted small">{o.payment_ref}</div>}</td>
+                    <td><span className={`chip chip-${o.channel}`}>{CHANNEL_LABEL[o.channel]}</span></td>
                     <td className="num">{money(o.total_cents)}</td>
                     <td><Badge status={o.status} /></td>
                     <td className="small">{o.created_by_name}</td>
@@ -71,7 +78,7 @@ function OrderModal({ id, onClose, onChanged }) {
             <dl className="details">
               <dt>Reference</dt><dd className="mono">{o.reference} <Badge status={o.status} /></dd>
               <dt>Buyer</dt><dd>{o.buyer_name}<div className="muted small">{[o.buyer_email, o.buyer_phone].filter(Boolean).join(' · ')}</div></dd>
-              <dt>Payment</dt><dd>{PAYMENT_LABEL[o.payment_method]}{o.payment_ref && ` · ${o.payment_ref}`}</dd>
+              <dt>Payment</dt><dd>{PAYMENT_LABEL[o.payment_method]}{o.payment_ref && ` · ${o.payment_ref}`} · {CHANNEL_LABEL[o.channel]}</dd>
               <dt>Amount</dt><dd>{money(o.subtotal_cents)}{o.discount_cents > 0 && <> − {money(o.discount_cents)} {o.promo_code && `(${o.promo_code})`}</>} = <strong>{money(o.total_cents)}</strong></dd>
               <dt>Sold by</dt><dd>{o.created_by_name} · {dateTime(o.created_at)}</dd>
               {o.notes && <><dt>Notes</dt><dd>{o.notes}</dd></>}

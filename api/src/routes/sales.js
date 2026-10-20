@@ -9,6 +9,8 @@ import { h, str, int, oneOf, bad, notFound, ticketCode, orderRef, csvEscape, Htt
 const r = Router();
 
 export const PAYMENT_METHODS = ['cash', 'gcash', 'maya', 'bank_transfer', 'card', 'comp', 'other'];
+// Where a sale happened: bought at the event (box office) or paid online (website request, Messenger…).
+export const CHANNELS = ['onsite', 'online'];
 
 /**
  * Validate a cart against current inventory and price it.
@@ -96,6 +98,7 @@ export function createOrder(req, ev, body) {
   const method = oneOf(body.payment_method, 'Payment method', PAYMENT_METHODS, { required: true });
   const paymentRef = str(body.payment_ref, 'Payment reference', { max: 200 }) ?? '';
   const notes = str(body.notes, 'Notes', { max: 1000 }) ?? '';
+  const channel = oneOf(body.channel, 'Sale type', CHANNELS) ?? 'onsite';
   const holders = Array.isArray(body.holder_names) ? body.holder_names : [];
   if (method === 'comp' && !MANAGE.includes(req.user.role)) throw new HttpError(403, 'Only managers can issue complimentary tickets');
   assertSellable(ev, method);
@@ -107,10 +110,10 @@ export function createOrder(req, ev, body) {
 
     const { lastInsertRowid } = db.prepare(`
       INSERT INTO orders (event_id, reference, buyer_name, buyer_email, buyer_phone, subtotal_cents, discount_cents, total_cents,
-                          payment_method, payment_ref, promo_code_id, notes, created_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                          payment_method, payment_ref, promo_code_id, notes, created_by, channel)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(ev.id, ref, buyerName, buyerEmail, buyerPhone, cart.subtotal_cents, cart.discount_cents, cart.total_cents,
-      method, paymentRef, cart.promo?.id ?? null, notes, req.user.id);
+      method, paymentRef, cart.promo?.id ?? null, notes, req.user.id, channel);
 
     const markSold = db.prepare("UPDATE seats SET status = 'sold' WHERE id = ? AND status = 'available'");
     const insertTicket = db.prepare(`
@@ -148,13 +151,15 @@ export function loadOrder(id, orgId, user) {
 r.get('/events/:id/orders', requireRole(...SELL), h((req, res) => {
   const ev = eventFor(req, req.params.id);
   const q = req.query.q ? `%${req.query.q}%` : null;
+  const channel = CHANNELS.includes(req.query.channel) ? req.query.channel : null;
   res.json(db.prepare(`
     SELECT o.*, u.name AS created_by_name,
       (SELECT COUNT(*) FROM tickets k WHERE k.order_id = o.id) AS ticket_count
     FROM orders o LEFT JOIN users u ON u.id = o.created_by
-    WHERE o.event_id = ? AND (? IS NULL OR o.reference LIKE ? OR o.buyer_name LIKE ? OR o.buyer_email LIKE ? OR o.buyer_phone LIKE ?)
+    WHERE o.event_id = ? AND (? IS NULL OR o.channel = ?)
+      AND (? IS NULL OR o.reference LIKE ? OR o.buyer_name LIKE ? OR o.buyer_email LIKE ? OR o.buyer_phone LIKE ?)
     ORDER BY o.created_at DESC, o.id DESC LIMIT 500
-  `).all(ev.id, q, q, q, q, q));
+  `).all(ev.id, channel, channel, q, q, q, q, q));
 }));
 
 r.get('/orders/:id', requireRole(...SELL), h((req, res) => res.json(loadOrder(req.params.id, req.orgId, req.user))));
@@ -213,7 +218,8 @@ r.post('/orders/:id/refund', requireRole(...MANAGE), h((req, res) => {
 // ---------- tickets ----------
 
 const TICKET_SELECT = `
-  SELECT k.*, o.reference AS order_reference, o.buyer_name, o.buyer_email, o.buyer_phone, o.payment_method,
+  SELECT k.*, o.reference AS order_reference, o.buyer_name, o.buyer_email, o.buyer_phone, o.payment_method, o.channel,
+         o.status AS order_status,
          u.name AS checked_in_by_name, t.color AS tier_color
   FROM tickets k JOIN orders o ON o.id = k.order_id
   LEFT JOIN users u ON u.id = k.checked_in_by LEFT JOIN tiers t ON t.id = k.tier_id
@@ -245,7 +251,7 @@ r.get('/events/:id/tickets', h((req, res) => {
 r.get('/events/:id/tickets.csv', requireRole(...MANAGE), h((req, res) => {
   const ev = eventFor(req, req.params.id);
   const cols = ['code', 'status', 'tier_name', 'seat_label', 'price_cents', 'holder_name', 'order_reference', 'buyer_name',
-    'buyer_email', 'buyer_phone', 'payment_method', 'created_at', 'checked_in_at', 'checked_in_by_name'];
+    'buyer_email', 'buyer_phone', 'payment_method', 'channel', 'created_at', 'checked_in_at', 'checked_in_by_name'];
   const lines = [cols.join(',')];
   for (const row of ticketRows(ev.id, req.query)) {
     lines.push(cols.map((c) => csvEscape(c === 'price_cents' ? (row[c] / 100).toFixed(2) : row[c])).join(','));

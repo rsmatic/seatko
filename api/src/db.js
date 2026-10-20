@@ -189,6 +189,16 @@ if (!hasColumn('orders', 'emailed_at')) {
   db.exec('ALTER TABLE orders ADD COLUMN emailed_at TEXT');
   db.exec('ALTER TABLE orders ADD COLUMN emailed_to TEXT');
 }
+if (!hasColumn('ticket_requests', 'channel')) {
+  // 'online': paid online with proof; 'onsite': filled in at the venue (or chose cash), pays at the ticket booth.
+  db.exec("ALTER TABLE ticket_requests ADD COLUMN channel TEXT NOT NULL DEFAULT 'online'");
+  db.exec("UPDATE ticket_requests SET channel = 'onsite' WHERE payment_method = 'cash'");
+}
+if (!hasColumn('orders', 'channel')) {
+  // Where the sale happened: 'online' (website request or paid online) or 'onsite' (at the event / box office).
+  db.exec("ALTER TABLE orders ADD COLUMN channel TEXT NOT NULL DEFAULT 'onsite'");
+  db.exec("UPDATE orders SET channel = 'online' WHERE payment_method != 'cash' AND id IN (SELECT order_id FROM ticket_requests WHERE order_id IS NOT NULL)");
+}
 if (!hasColumn('events', 'logo')) {
   // Optional per-event logo: replaces the default logo on that event's tickets and QR codes.
   db.exec('ALTER TABLE events ADD COLUMN logo TEXT');
@@ -294,6 +304,8 @@ export const DEFAULT_ORG_SETTINGS = {
   ticket_footer: 'Present this QR code at the entrance. One scan per ticket.',
   // Shown on the organizer's website when a visitor clicks "Get tickets".
   buy_instructions: '',
+  // The organizer's website (where the ticket embed is), for the printable buyer's guide banner.
+  website_url: '',
   // Optional payment QR code (e.g. GCash) image in /uploads, shown with the buy instructions.
   payment_qr: '',
   // Accept ticket requests (with proof of payment) from the website embed. '1' = on.

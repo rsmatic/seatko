@@ -46,6 +46,12 @@ r.get('/events/:id/stats', requireRole(...MANAGE), h((req, res) => {
       SELECT payment_method, COUNT(*) orders, SUM(total_cents) revenue_cents FROM orders
       WHERE event_id = ? AND status = 'paid' GROUP BY payment_method ORDER BY revenue_cents DESC
     `).all(ev.id),
+    // Online vs on-site, split by payment method.
+    by_channel: db.prepare(`
+      SELECT channel, payment_method, COUNT(*) orders, SUM(total_cents) revenue_cents,
+        SUM((SELECT COUNT(*) FROM tickets k WHERE k.order_id = o.id AND k.status != 'void')) tickets
+      FROM orders o WHERE event_id = ? AND status = 'paid' GROUP BY channel, payment_method ORDER BY channel, revenue_cents DESC
+    `).all(ev.id),
     by_cashier: db.prepare(`
       SELECT COALESCE(u.name, 'Deleted user') AS name, COUNT(*) orders, SUM(o.total_cents) revenue_cents
       FROM orders o LEFT JOIN users u ON u.id = o.created_by

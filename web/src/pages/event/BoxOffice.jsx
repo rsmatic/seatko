@@ -7,7 +7,7 @@ import { Field, Loadable, Modal } from '../../components/ui.jsx';
 import SeatMap from '../../components/SeatMap.jsx';
 import EmailTickets, { isEmail } from '../../components/EmailTickets.jsx';
 
-const EMPTY_BUYER = { buyer_name: '', buyer_email: '', buyer_phone: '', payment_method: 'cash', payment_ref: '', notes: '' };
+const EMPTY_BUYER = { buyer_name: '', buyer_email: '', buyer_phone: '', payment_method: 'cash', payment_ref: '', notes: '', channel: 'onsite' };
 
 export default function BoxOffice({ event, reloadEvent }) {
   const { can, settings, toast } = useApp();
@@ -64,7 +64,7 @@ export default function BoxOffice({ event, reloadEvent }) {
     setDone(shown);
     setSelected(new Set());
     setGa({});
-    setBuyer(EMPTY_BUYER);
+    setBuyer({ ...EMPTY_BUYER, channel: buyer.channel }); // the cashier usually stays on the same sale type
     setPromo('');
     setPromoInput('');
     map.reload();
@@ -137,6 +137,13 @@ export default function BoxOffice({ event, reloadEvent }) {
           </div>
         )}
 
+        <div className="field">
+          <span className="field-label">Sale type</span>
+          <div className="seg">
+            <label><input type="radio" name="channel" checked={buyer.channel === 'onsite'} onChange={() => setBuyer({ ...buyer, channel: 'onsite' })} /> On-site <span className="field-hint">(bought at the event)</span></label>
+            <label><input type="radio" name="channel" checked={buyer.channel === 'online'} onChange={() => setBuyer({ ...buyer, channel: 'online' })} /> Online <span className="field-hint">(paid online, e.g. via Messenger)</span></label>
+          </div>
+        </div>
         <Field label="Buyer name"><input value={buyer.buyer_name} onChange={set('buyer_name')} required /></Field>
         <div className="form-grid">
           <Field label="Email" hint={buyer.buyer_email && !isEmail(buyer.buyer_email) ? 'Not a valid email address' : null}>

@@ -10,6 +10,9 @@
  * details and upload proof of payment for you to approve; otherwise they send a ready-made
  * message via the buy URL.
  * Add data-buy-mode="link" to make the button go straight to the buy URL instead.
+ * Add data-inline to show the ticket form on the page itself instead of behind a button, and
+ * data-channel="onsite" for buyers at the venue: they pay at the ticket booth, so no proof upload
+ * (this is what SeatKo's /buy/:id?onsite=1 page uses).
  *   <script src="https://YOUR-SEATKO-HOST/embed.js" defer></script>
  *
  * Styling inherits the host page's --accent, --text, --muted, --line, --bg-2, --radius, --display
@@ -57,6 +60,10 @@
     '.seatko-dlg .seatko-actions .btn:disabled{opacity:.45;cursor:default}',
     '.seatko-dlg select option{color:#111}',
     '.seatko-fixed{font-size:.95rem;font-weight:600;color:var(--text,#ececec);padding:.55rem .7rem;border:1px solid var(--line,#2a2a2e);border-radius:8px;background:rgba(255,255,255,.04)}',
+    '.seatko-inline{max-height:none;width:auto;max-width:32rem;margin:0 auto}',
+    '.seatko-refbox{text-align:center;border:2px dashed var(--accent,#d9b56c);border-radius:10px;padding:.8rem}',
+    '.seatko-refbox span{display:block;font-size:.8rem;color:var(--muted,#9a9aa2)}',
+    '.seatko-refbox strong{display:block;font-size:1.8rem;letter-spacing:.06em;color:var(--accent,#d9b56c)}',
     '.seatko-note{font-size:.8rem;color:var(--muted,#9a9aa2);text-align:center;margin:0}',
     // Host sites may only style <a class="btn">; keep the secondary <button> transparent like theirs.
     '.seatko-dlg .btn:not(.primary){background:transparent;color:inherit;border:1px solid var(--line,#2a2a2e)}',
@@ -114,8 +121,15 @@
       });
       if (ev.tiers.length) box.appendChild(list);
 
+      var inline = root.hasAttribute('data-inline');
+      var opts = { onsite: root.getAttribute('data-channel') === 'onsite' };
+      if (inline && list.parentNode) box.removeChild(list); // the form lists the tiers itself
       var actions = el('div', 'seatko-actions');
-      if (ev.status === 'sold_out') actions.appendChild(el('p', 'seatko-status', 'Sold out. Thank you!'));
+      if (inline && ev.status === 'on_sale' && ev.tiers.some(function (t) { return t.remaining > 0; })) {
+        var card = el('div', 'seatko-dlg seatko-inline');
+        card.appendChild(buildBuyForm(ev, buyUrl, opts));
+        actions.appendChild(card);
+      } else if (ev.status === 'sold_out') actions.appendChild(el('p', 'seatko-status', 'Sold out. Thank you!'));
       else if (ev.status === 'closed') actions.appendChild(el('p', 'seatko-status', 'Ticket sales are closed.'));
       else if (buyUrl || ev.requests_enabled) {
         var a = el('a', 'btn primary', root.getAttribute('data-buy-label') || 'Get tickets');
@@ -124,7 +138,7 @@
         a.rel = 'noopener';
         var onSale = ev.tiers.some(function (t) { return t.remaining > 0; });
         if (root.getAttribute('data-buy-mode') !== 'link' && onSale && window.HTMLDialogElement) {
-          a.addEventListener('click', function (e) { e.preventDefault(); openBuyDialog(ev, buyUrl); });
+          a.addEventListener('click', function (e) { e.preventDefault(); openBuyDialog(ev, buyUrl, opts); });
         }
         actions.appendChild(a);
       }
@@ -251,8 +265,9 @@
   }
 
   /** Request mode: buyer details + proof of payment, sent to SeatKo for the organizer to approve. */
-  function requestForm(form, ev, buyUrl) {
-    howToBuy(form, ev);
+  function requestForm(form, ev, buyUrl, opts) {
+    var onsite = opts && opts.onsite;
+    if (!onsite) howToBuy(form, ev);
     var name = field(form, 'Full name *', el('input'));
     name.autocomplete = 'name';
     var email = field(form, 'Email * (your tickets will be sent here)', el('input'));
@@ -263,12 +278,14 @@
     phone.autocomplete = 'tel';
     var LABELS = { gcash: 'GCash', maya: 'Maya', bank_transfer: 'Bank transfer', cash: 'Cash', other: 'Other' };
     var methods = (ev.payment_methods && ev.payment_methods.length ? ev.payment_methods : ['gcash', 'maya', 'bank_transfer', 'cash', 'other']);
+    // At the venue: cash, or the e-wallets this organizer accepts, paid at the ticket booth.
+    if (onsite) methods = ['cash'].concat(['gcash', 'maya'].filter(function (m) { return methods.indexOf(m) >= 0; }));
     var method;
     if (methods.length === 1) {
       // Only one accepted method: show it as fixed text instead of a choice.
       method = { value: methods[0] };
       var fixed = el('div', 'seatko-fixed', LABELS[methods[0]] || methods[0]);
-      field(form, 'Paid via', fixed);
+      field(form, onsite ? 'You will pay at the booth with' : 'Paid via', fixed);
     } else {
       method = el('select');
       methods.forEach(function (m) {
@@ -276,7 +293,7 @@
         o.value = m;
         method.appendChild(o);
       });
-      field(form, 'Paid via *', method);
+      field(form, onsite ? 'How will you pay at the booth? *' : 'Paid via *', method);
     }
     var ref = field(form, 'Reference number', el('input'));
     var proof = el('input');
@@ -294,11 +311,14 @@
     form.appendChild(trap);
 
     var actions = el('div', 'seatko-actions');
-    var submit = el('button', 'btn primary', 'Submit request');
+    var submitLabel = onsite ? 'Submit and get my reference' : 'Submit request';
+    var submit = el('button', 'btn primary', submitLabel);
     submit.type = 'button';
     actions.appendChild(submit);
     form.appendChild(actions);
-    var status = el('p', 'seatko-note', 'No seat is reserved until your payment is confirmed. Your tickets will be emailed to you.');
+    var status = el('p', 'seatko-note', onsite
+      ? 'After you submit, show your reference at the ticket booth and pay there. Your ticket with its QR code is emailed to you once paid.'
+      : 'No seat is reserved until your payment is confirmed. Your tickets will be emailed to you.');
     form.appendChild(status);
     if (buyUrl) {
       var ask = el('a', 'seatko-note', 'Questions? Message us');
@@ -311,7 +331,7 @@
     }
 
     // Cash is paid in person: no reference number or screenshot to give.
-    function isCash() { return method.value === 'cash'; }
+    function isCash() { return onsite || method.value === 'cash'; }
     function showCashFields() {
       ref.parentNode.style.display = proof.parentNode.style.display = isCash() ? 'none' : '';
     }
@@ -326,7 +346,7 @@
     }
     // Clear an error as soon as the visitor starts fixing it.
     form.addEventListener('input', function () {
-      if (submit.disabled && submit.textContent !== 'Submit request') return;
+      if (submit.disabled && submit.textContent !== submitLabel) return;
       status.textContent = hint;
       status.style.color = '';
     });
@@ -348,7 +368,8 @@
       fd.append('note', note.value.trim());
       fd.append('website', trap.value);
       fd.append('items', JSON.stringify(items));
-      if (proof.files[0]) fd.append('proof', proof.files[0]);
+      if (onsite) fd.append('channel', 'onsite');
+      else if (proof.files[0]) fd.append('proof', proof.files[0]);
 
       submit.disabled = true;
       submit.textContent = 'Sending…';
@@ -363,16 +384,27 @@
           form.innerHTML = '';
           form.appendChild(keep);
           form.appendChild(el('h3', null, 'Request received!'));
-          form.appendChild(el('p', null, 'Thank you, ' + name.value.trim() + '. We will check your payment of ' +
-            money(res.d.amount_cents, ev.currency) + ' and email your tickets to ' + res.d.email + '.'));
-          var refLine = el('p', 'seatko-note', 'Your reference: ' + res.d.reference);
-          refLine.style.fontWeight = '600';
-          form.appendChild(refLine);
+          if (res.d.channel === 'onsite') {
+            // Paid at the booth: the reference is what the buyer shows there.
+            var box = el('div', 'seatko-refbox');
+            box.appendChild(el('span', null, 'Your reference'));
+            box.appendChild(el('strong', null, res.d.reference));
+            form.appendChild(box);
+            form.appendChild(el('p', null, 'Thank you, ' + name.value.trim() + '. Go to the ticket booth, show this reference and pay ' +
+              money(res.d.amount_cents, ev.currency) + '. Your tickets with their QR codes are emailed to ' + res.d.email + ' as soon as you have paid.'));
+            form.appendChild(el('p', 'seatko-note', 'Take a screenshot of this page so you have your reference at hand.'));
+          } else {
+            form.appendChild(el('p', null, 'Thank you, ' + name.value.trim() + '. We will check your payment of ' +
+              money(res.d.amount_cents, ev.currency) + ' and email your tickets to ' + res.d.email + '.'));
+            var refLine = el('p', 'seatko-note', 'Your reference: ' + res.d.reference);
+            refLine.style.fontWeight = '600';
+            form.appendChild(refLine);
+          }
           form.appendChild(el('p', 'seatko-note', 'A confirmation email is on its way. Check your spam folder if you don\'t see it.'));
         })
         .catch(function (e) {
           submit.disabled = false;
-          submit.textContent = 'Submit request';
+          submit.textContent = submitLabel;
           fail(e.message || 'Could not send. Please check your connection and try again.');
         });
     });
@@ -384,17 +416,28 @@
   }
 
   /** "Get tickets" window: pick tiers, read how to pay, send a ready-made message. */
-  function openBuyDialog(ev, buyUrl) {
-    var qty = {};
+  function openBuyDialog(ev, buyUrl, opts) {
     var dlg = el('dialog', 'seatko-dlg');
     dlg.setAttribute('aria-label', 'Get tickets');
+    var form = buildBuyForm(ev, buyUrl, opts, function () { dlg.close(); });
+    dlg.appendChild(form);
+    dlg.addEventListener('close', function () { dlg.remove(); });
+    dlg.addEventListener('click', function (e) { if (e.target === dlg) dlg.close(); });
+    document.body.appendChild(dlg);
+    dlg.showModal();
+  }
+
+  /** The ticket form: tiers and quantities, then a request form or a ready-made message. */
+  function buildBuyForm(ev, buyUrl, opts, onClose) {
+    var qty = {};
     var form = el('form');
-    form.method = 'dialog';
     form.addEventListener('submit', function (e) { e.preventDefault(); }); // Enter in a field must not close the window
-    var close = el('button', 'seatko-x', '×');
+    // The confirmation keeps the form's first child, so there is always one (the close button in the window).
+    var close = el('button', 'seatko-x', onClose ? '×' : '');
     close.type = 'button';
     close.setAttribute('aria-label', 'Close');
-    close.addEventListener('click', function () { dlg.close(); });
+    if (onClose) close.addEventListener('click', onClose);
+    else close.style.display = 'none';
     form.appendChild(close);
     form.appendChild(el('h3', null, ev.title));
     form.appendChild(el('div', 'seatko-note', when(ev)));
@@ -443,7 +486,7 @@
 
     // Two modes: a request form with proof of payment (when the organizer accepts online
     // requests), or a ready-made message to send via the buy URL (e.g. Messenger).
-    var onChange = ev.requests_enabled ? requestForm(form, ev, buyUrl) : messageForm(form, ev, buyUrl);
+    var onChange = ev.requests_enabled ? requestForm(form, ev, buyUrl, opts) : messageForm(form, ev, buyUrl);
 
     function update() {
       var lines = [];
@@ -460,11 +503,7 @@
     }
 
     update();
-    dlg.appendChild(form);
-    dlg.addEventListener('close', function () { dlg.remove(); });
-    dlg.addEventListener('click', function (e) { if (e.target === dlg) dlg.close(); });
-    document.body.appendChild(dlg);
-    dlg.showModal();
+    return form;
   }
 
   function load(root) {

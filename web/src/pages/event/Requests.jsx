@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../../api.js';
 import { useAction, useApp, useLoad } from '../../state.jsx';
-import { dateTime, money } from '../../format.js';
+import { dateTime, money, CHANNEL_LABEL } from '../../format.js';
 import { Badge, Empty, Field, Loadable, Modal, Tabs } from '../../components/ui.jsx';
 import { ProofImage } from '../../components/BillingBits.jsx';
 import SeatMap from '../../components/SeatMap.jsx';
@@ -14,23 +14,34 @@ const itemsText = (items) => items.map((i) => `${i.qty} × ${i.tier_name}`).join
 
 export default function Requests({ event, reloadEvent }) {
   const [status, setStatus] = useState('pending');
+  const [q, setQ] = useState('');
+  const [channel, setChannel] = useState('');
   const [params, setParams] = useSearchParams();
-  const state = useLoad(`/events/${event.id}/requests${status ? `?status=${status}` : ''}`);
+  const state = useLoad(`/events/${event.id}/requests?status=${status}&channel=${channel}&q=${encodeURIComponent(q)}`);
   const openId = params.get('request');
 
   return (
     <section className="card">
       <p className="muted small" style={{ marginTop: 0 }}>
-        Ticket requests sent from your website with proof of payment. No seats are held until you approve.
-        Approving assigns seats, issues the tickets and emails them to the buyer.
+        Online requests come from your website with proof of payment. On-site requests are filled in at the venue
+        (from the QR code on your buyer's guide banner): the buyer shows you their reference at the ticket booth and pays there.
+        No seats are held until you approve; approving assigns seats, issues the tickets and emails them to the buyer.
       </p>
+      <div className="filters">
+        <input type="search" placeholder="Search reference, name, email, phone…" value={q} onChange={(e) => setQ(e.target.value)} />
+        <select value={channel} onChange={(e) => setChannel(e.target.value)}>
+          <option value="">Online &amp; on-site</option>
+          <option value="onsite">On-site only</option>
+          <option value="online">Online only</option>
+        </select>
+      </div>
       <Tabs value={status} onChange={setStatus}
         tabs={[{ key: 'pending', label: 'To review' }, { key: 'approved', label: 'Approved' }, { key: 'rejected', label: 'Rejected' }, { key: '', label: 'All' }]} />
       <Loadable state={state}>
         {(rows) => !rows.length ? <Empty title={status === 'pending' ? 'Nothing to review' : 'No requests'}>Requests from your website appear here.</Empty> : (
           <div className="table-wrap">
             <table>
-              <thead><tr><th>Submitted</th><th>Buyer</th><th>Tickets</th><th className="num">Amount</th><th>Payment</th><th>Status</th></tr></thead>
+              <thead><tr><th>Submitted</th><th>Buyer</th><th>Tickets</th><th className="num">Amount</th><th>Payment</th><th>Sale type</th><th>Status</th></tr></thead>
               <tbody>
                 {rows.map((r) => (
                   <tr key={r.id} className="clickable" onClick={() => setParams({ request: r.id })}>
@@ -39,6 +50,7 @@ export default function Requests({ event, reloadEvent }) {
                     <td className="small">{itemsText(r.items)}</td>
                     <td className="num">{money(r.amount_cents)}</td>
                     <td className="small">{METHOD[r.payment_method] ?? r.payment_method}{r.payment_ref && <div className="mono muted">{r.payment_ref}</div>}</td>
+                    <td><span className={`chip chip-${r.channel}`}>{CHANNEL_LABEL[r.channel]}</span></td>
                     <td><Badge status={STATUS_BADGE[r.status][0]}>{STATUS_BADGE[r.status][1]}</Badge></td>
                   </tr>
                 ))}
@@ -86,7 +98,10 @@ function ReviewModal({ id, event, onClose, onChanged }) {
   const [sendEmail, setSendEmail] = useState(true);
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState('');
+  const [paidWith, setPaidWith] = useState(null); // on-site: what they actually paid with at the booth
+  const [paidRef, setPaidRef] = useState('');
   const [run, busy] = useAction();
+  const onsite = r?.channel === 'onsite';
 
   // Pre-fill: suggested seats and the requested general-admission quantities.
   useEffect(() => {
@@ -110,8 +125,9 @@ function ReviewModal({ id, event, onClose, onChanged }) {
       seat_ids: [...selected],
       ga: Object.entries(ga).filter(([, q]) => q > 0).map(([tier_id, qty]) => ({ tier_id: Number(tier_id), qty })),
       send_email: sendEmail,
+      ...(onsite ? { payment_method: paidWith ?? r.payment_method, payment_ref: paidRef.trim() } : {}),
     };
-    const out = await run(() => api(`/requests/${id}/approve`, { method: 'POST', body }), 'Request approved');
+    const out = await run(() => api(`/requests/${id}/approve`, { method: 'POST', body }), onsite ? 'Marked as paid, tickets issued' : 'Request approved');
     if (out.email_error) toast(`Tickets issued, but the email failed: ${out.email_error}`, 'error');
     else if (sendEmail) toast(`Tickets emailed to ${r.buyer_email}`);
     state.setData(out.request);
@@ -137,7 +153,7 @@ function ReviewModal({ id, event, onClose, onChanged }) {
         <>
           <button className="btn btn-danger-ghost" onClick={() => setRejecting(true)} disabled={busy}>Reject…</button>
           <button className="btn btn-primary" onClick={approve} disabled={busy || !Object.values(picked).some(Boolean)}>
-            {busy ? 'Approving…' : `Approve${sendEmail && canEmail ? ' & email tickets' : ''}`}
+            {busy ? 'Saving…' : `${onsite ? 'Mark as paid' : 'Approve'}${sendEmail && canEmail ? ' & email tickets' : ''}`}
           </button>
         </>
       ))}>
@@ -152,24 +168,43 @@ function ReviewModal({ id, event, onClose, onChanged }) {
                   <dt>Buyer</dt><dd><strong>{req.buyer_name}</strong><div className="small">{req.buyer_email}</div><div className="small">{req.buyer_phone}</div></dd>
                   <dt>Requested</dt><dd>{itemsText(req.items)}</dd>
                   <dt>Amount</dt><dd><strong>{money(req.amount_cents)}</strong></dd>
-                  <dt>Paid via</dt><dd>{METHOD[req.payment_method] ?? req.payment_method}{req.payment_ref && <> · <span className="mono">{req.payment_ref}</span></>}</dd>
+                  <dt>Sale type</dt><dd><span className={`chip chip-${req.channel}`}>{CHANNEL_LABEL[req.channel]}</span>{req.channel === 'onsite' && <span className="muted small"> · pays at the ticket booth</span>}</dd>
+                  <dt>{req.channel === 'onsite' && pending ? 'Will pay with' : 'Paid via'}</dt><dd>{METHOD[req.payment_method] ?? req.payment_method}{req.payment_ref && <> · <span className="mono">{req.payment_ref}</span></>}</dd>
                   <dt>Submitted</dt><dd>{dateTime(req.created_at)}</dd>
                   {req.note && <><dt>Buyer note</dt><dd>{req.note}</dd></>}
                   {req.review_note && <><dt>{req.status === 'rejected' ? 'Reason' : 'Note'}</dt><dd>{req.review_note}</dd></>}
                   {req.order_id && <><dt>Order</dt><dd><Link to={`/events/${event.id}/orders?order=${req.order_id}`}>{req.order_reference}</Link></dd></>}
                 </dl>
               </div>
-              <div>
-                <div className="field-label">Proof of payment</div>
-                {req.proof ? <ProofImage path={`/requests/${req.id}/proof`} /> : <span className="muted small">No file</span>}
-              </div>
+              {req.channel === 'onsite' ? (
+                pending && !rejecting && (
+                  <div>
+                    <div className="alert"><div>Collect <strong>{money(req.amount_cents)}</strong> at the booth, then click <strong>Mark as paid</strong>. The tickets and their QR codes are only issued then.</div></div>
+                    <div className="form-grid">
+                      <Field label="Paid with">
+                        <select value={paidWith ?? req.payment_method} onChange={(e) => setPaidWith(e.target.value)}>
+                          {Object.entries(METHOD).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                        </select>
+                      </Field>
+                      {(paidWith ?? req.payment_method) !== 'cash' && (
+                        <Field label="Reference no."><input value={paidRef} onChange={(e) => setPaidRef(e.target.value)} placeholder="GCash ref no." /></Field>
+                      )}
+                    </div>
+                  </div>
+                )
+              ) : (
+                <div>
+                  <div className="field-label">Proof of payment</div>
+                  {req.proof ? <ProofImage path={`/requests/${req.id}/proof`} /> : <span className="muted small">No file</span>}
+                </div>
+              )}
             </div>
 
             {pending && !rejecting && (
               <>
                 <h4>Assign seats</h4>
                 <p className="small muted" style={{ marginTop: 0 }}>
-                  Suggested seats are pre-selected. Click seats to change them. Check the payment against your GCash or bank before approving.
+                  Suggested seats are pre-selected. Click seats to change them. {onsite ? 'Only mark it as paid once you have the money.' : 'Check the payment against your GCash or bank before approving.'}
                 </p>
                 {event.tiers.filter((t) => t.kind === 'ga' && (ga[t.id] || req.items.some((i) => i.tier_id === t.id))).map((t) => (
                   <div key={t.id} className="ga-line">

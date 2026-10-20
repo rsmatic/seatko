@@ -17,6 +17,7 @@ function SettingsForm() {
   const [f, setF] = useState({
     org_name: settings.org_name, org_tagline: settings.org_tagline, currency: settings.currency,
     qr_color: settings.qr_color, ticket_accent: settings.ticket_accent, ticket_footer: settings.ticket_footer, buy_instructions: settings.buy_instructions ?? '',
+    website_url: settings.website_url ?? '',
   });
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
 
@@ -70,6 +71,9 @@ function SettingsForm() {
             <Field label="QR color" hint="Keep it dark for reliable scanning"><input type="color" value={f.qr_color} onChange={set('qr_color')} /></Field>
             <Field label="Ticket accent"><input type="color" value={f.ticket_accent} onChange={set('ticket_accent')} /></Field>
             <Field label="Ticket footer text" span={2}><input value={f.ticket_footer} onChange={set('ticket_footer')} /></Field>
+            <Field label="Your website" span={2} hint="The page with your Get tickets button. Used for the QR code on the printable buyer's guide banner.">
+              <input value={f.website_url} onChange={set('website_url')} placeholder="https://poimen.ph" spellCheck={false} />
+            </Field>
             <Field label="How to buy tickets (shown on your website)" span={2}
               hint="Appears when a visitor clicks Get tickets in the website embed. Example: how to pay, where to send the screenshot, when they get their ticket.">
               <textarea rows={4} value={f.buy_instructions} onChange={set('buy_instructions')}

@@ -23,6 +23,7 @@ export function publicSettings(orgId) {
     ticket_accent: s.ticket_accent,
     ticket_footer: s.ticket_footer,
     buy_instructions: s.buy_instructions,
+    website_url: s.website_url,
     logo_url: s.logo ? `/uploads/${s.logo}` : '/api/settings/default-logo',
     has_custom_logo: !!s.logo,
     payment_qr_url: s.payment_qr ? `/uploads/${s.payment_qr}` : null,
@@ -56,6 +57,7 @@ r.put('/', requireRole('admin'), h((req, res) => {
     ticket_accent: color(req.body.ticket_accent, 'Ticket accent'),
     ticket_footer: str(req.body.ticket_footer, 'Ticket footer', { max: 300 }),
     buy_instructions: str(req.body.buy_instructions, 'How to buy', { max: 2000 }),
+    website_url: str(req.body.website_url, 'Website', { max: 300 }),
     online_requests: req.body.online_requests === undefined ? undefined : req.body.online_requests ? '1' : '0',
     sheet_webhook_url: str(req.body.sheet_webhook_url, 'Google Sheet URL', { max: 300 }),
     request_methods: req.body.request_methods === undefined ? undefined
@@ -65,6 +67,7 @@ r.put('/', requireRole('admin'), h((req, res) => {
   if (fields.sheet_webhook_url && !isSheetUrl(fields.sheet_webhook_url)) {
     throw bad('Paste the Apps Script web app URL; it looks like https://script.google.com/macros/s/…/exec');
   }
+  if (fields.website_url && !/^https?:\/\/\S+$/i.test(fields.website_url)) throw bad('Website must start with https://');
   if (fields.currency && !/^[A-Z]{3}$/.test(fields.currency)) throw bad('Currency must be a 3-letter ISO code, e.g. PHP');
   for (const [k, v] of Object.entries(fields)) if (v !== undefined) setSetting.run(req.orgId, k, v);
   audit(req, 'update', 'settings', null, { ...fields, sheet_webhook_url: fields.sheet_webhook_url ? '(set)' : fields.sheet_webhook_url });

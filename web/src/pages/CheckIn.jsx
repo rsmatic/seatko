@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { api } from '../api.js';
 import { useLoad } from '../state.jsx';
-import { dateTime, timeOnly } from '../format.js';
+import { dateTime, timeOnly, PAYMENT_LABEL, CHANNEL_LABEL } from '../format.js';
 import { PageHeader, Spinner } from '../components/ui.jsx';
 
 const RESULT_STYLE = {
@@ -53,7 +53,7 @@ export default function CheckIn() {
   const showFlash = (r) => {
     const kind = r.result === 'ok' ? 'ok' : r.result === 'already_used' ? 'warn' : 'bad';
     const t = r.ticket;
-    const detail = t ? [t.holder_name, t.seat_label ?? t.tier_name].filter(Boolean).join(' · ') : r.message;
+    const detail = t ? [t.holder_name, t.seat_label ?? t.tier_name, paidText(t)].filter(Boolean).join(' · ') : r.message;
     setFlash({ kind, key: Date.now(), title: RESULT_STYLE[r.result]?.title ?? 'Invalid', detail });
     clearTimeout(flashTimer.current);
     flashTimer.current = setTimeout(() => setFlash(null), 4000);
@@ -144,6 +144,7 @@ export default function CheckIn() {
                     <div className="mono">{result.ticket.code}</div>
                     <div><strong>{result.ticket.holder_name}</strong></div>
                     <div>{result.ticket.seat_label ?? result.ticket.tier_name}</div>
+                    <PaidLine t={result.ticket} />
                   </div>
                 )}
               </div>
@@ -153,7 +154,7 @@ export default function CheckIn() {
             <ul className="list compact">
               {(recent.data || []).map((t) => (
                 <li key={t.id} className="split small">
-                  <span><span className="mono">{t.code}</span> · {t.holder_name} · {t.seat_label ?? t.tier_name}</span>
+                  <span><span className="mono">{t.code}</span> · {t.holder_name} · {t.seat_label ?? t.tier_name} <span className={`chip chip-${t.channel}`}>{CHANNEL_LABEL[t.channel]}</span></span>
                   <span className="muted">{timeOnly(t.checked_in_at)}</span>
                 </li>
               ))}
@@ -163,5 +164,23 @@ export default function CheckIn() {
         </div>
       )}
     </>
+  );
+}
+
+/** How the ticket was paid: "Paid · Online · GCash", or complimentary / refunded. */
+function paidText(t) {
+  if (t.order_status === 'refunded') return 'Refunded';
+  if (t.payment_method === 'comp') return 'Complimentary';
+  return `Paid · ${CHANNEL_LABEL[t.channel] ?? ''} · ${PAYMENT_LABEL[t.payment_method] ?? t.payment_method}`;
+}
+
+function PaidLine({ t }) {
+  const refunded = t.order_status === 'refunded';
+  return (
+    <div className="scan-paid">
+      <span className={`chip ${refunded ? 'chip-bad' : `chip-${t.channel}`}`}>{refunded ? 'Refunded' : CHANNEL_LABEL[t.channel]}</span>
+      {!refunded && <span>{t.payment_method === 'comp' ? 'Complimentary' : `Paid · ${PAYMENT_LABEL[t.payment_method] ?? t.payment_method}`}</span>}
+      <span className="muted small mono">{t.order_reference}</span>
+    </div>
   );
 }

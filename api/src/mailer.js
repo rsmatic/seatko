@@ -111,17 +111,21 @@ const peso = (c) => `₱${(c / 100).toLocaleString('en-PH', { minimumFractionDig
 /** Sent right after a buyer submits a request from the organizer's website. */
 export function requestReceivedEmail({ request, event, org }) {
   const lines = requestLines(request);
+  const onsite = request.channel === 'onsite';
   const subject = `We received your ticket request for ${event.title}`;
   const inner = `
     <p style="margin:0 0 12px">Hi ${esc(request.buyer_name)},</p>
-    <p style="margin:0 0 12px">Thank you! We received your request and payment details for <strong>${esc(event.title)}</strong> (${esc(when(event))}).</p>
+    <p style="margin:0 0 12px">Thank you! We received your request${onsite ? '' : ' and payment details'} for <strong>${esc(event.title)}</strong> (${esc(when(event))}).</p>
     <p style="margin:0 0 4px"><strong>${lines.map(esc).join('<br>')}</strong></p>
     <p style="margin:0 0 12px">Amount: ${esc(peso(request.amount_cents))} via ${esc(methodLabel(request.payment_method))}${request.payment_ref ? ` (ref. ${esc(request.payment_ref)})` : ''}</p>
-    <p style="margin:0">We'll check your payment and email your tickets with their QR codes to this address. Seats are assigned once the payment is confirmed.</p>`;
+    <p style="margin:0">${onsite
+    ? `Go to the ticket booth, show your reference <strong>${esc(request.reference)}</strong> and pay there. Your tickets with their QR codes are emailed to this address as soon as you have paid.`
+    : "We'll check your payment and email your tickets with their QR codes to this address. Seats are assigned once the payment is confirmed."}</p>`;
   const footer = `Request ${esc(request.reference)} · Sent by SeatKo for ${esc(org.org_name || 'the organizer')}. Reply to this email if you have questions.`;
   const text = [`Hi ${request.buyer_name},`, '', `We received your ticket request for ${event.title} (${when(event)}):`, ...lines,
     `Amount: ${peso(request.amount_cents)} via ${methodLabel(request.payment_method)}${request.payment_ref ? ` (ref. ${request.payment_ref})` : ''}`, '',
-    "We'll check your payment and email your tickets once it is confirmed.", `Request ${request.reference}`].join('\n');
+    onsite ? `Go to the ticket booth, show your reference ${request.reference} and pay there. Your tickets are emailed once you have paid.`
+      : "We'll check your payment and email your tickets once it is confirmed.", `Request ${request.reference}`].join('\n');
   return { subject, html: shell(org, inner, footer), text };
 }
 

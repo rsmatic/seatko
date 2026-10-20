@@ -1,5 +1,5 @@
 import { useLoad } from '../../state.jsx';
-import { money, PAYMENT_LABEL } from '../../format.js';
+import { money, PAYMENT_LABEL, CHANNEL_LABEL } from '../../format.js';
 import { Empty, Loadable, Meter, Stat } from '../../components/ui.jsx';
 import SalesChart from '../../components/SalesChart.jsx';
 
@@ -7,7 +7,7 @@ export default function Reports({ event }) {
   const state = useLoad(`/events/${event.id}/stats`);
   return (
     <Loadable state={state}>
-      {({ summary, tiers, by_method, by_cashier, daily, promos }) => (
+      {({ summary, tiers, by_method, by_channel, by_cashier, daily, promos }) => (
         <>
           <div className="stats">
             <Stat label="Net revenue" value={money(summary.revenue_cents)} />
@@ -15,6 +15,8 @@ export default function Reports({ event }) {
             <Stat label="Avg. per order" value={money(summary.orders ? summary.revenue_cents / summary.orders : 0)} />
             <Stat label="Attendance" value={`${summary.checked_in} / ${summary.sold}`} />
           </div>
+
+          <ChannelReport rows={by_channel} />
 
           <section className="card">
             <h3>Revenue · last 60 days</h3>
@@ -80,5 +82,37 @@ export default function Reports({ event }) {
         </>
       )}
     </Loadable>
+  );
+}
+
+const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+/** Online vs on-site sales, each split by payment method. */
+function ChannelReport({ rows }) {
+  const total = (ch, k) => rows.filter((r) => !ch || r.channel === ch).reduce((a, r) => a + r[k], 0);
+  if (!rows.length) return null;
+  return (
+    <section className="card">
+      <h3>Online vs on-site</h3>
+      <div className="stats">
+        {['online', 'onsite'].map((ch) => (
+          <Stat key={ch} label={`${CHANNEL_LABEL[ch]} · ${plural(total(ch, 'tickets'), 'ticket')} · ${plural(total(ch, 'orders'), 'order')}`} value={money(total(ch, 'revenue_cents'))} />
+        ))}
+      </div>
+      <div className="table-wrap">
+        <table>
+          <thead><tr><th>Sale type</th><th>Payment</th><th>Orders</th><th>Tickets</th><th className="num">Revenue</th></tr></thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={`${r.channel}-${r.payment_method}`}>
+                <td><span className={`chip chip-${r.channel}`}>{CHANNEL_LABEL[r.channel]}</span></td>
+                <td>{PAYMENT_LABEL[r.payment_method]}</td><td>{r.orders}</td><td>{r.tickets}</td><td className="num">{money(r.revenue_cents)}</td>
+              </tr>
+            ))}
+            <tr><th colSpan={2}>Total</th><th>{total(null, 'orders')}</th><th>{total(null, 'tickets')}</th><th className="num">{money(total(null, 'revenue_cents'))}</th></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }

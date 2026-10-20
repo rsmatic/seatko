@@ -46,6 +46,9 @@ export const PAYMENT_LABEL = {
   cash: 'Cash', gcash: 'GCash', maya: 'Maya', bank_transfer: 'Bank transfer', card: 'Card', comp: 'Complimentary', other: 'Other',
 };
 
+// Where a sale happened (orders.channel).
+export const CHANNEL_LABEL = { onsite: 'On-site', online: 'Online' };
+
 export const ROLE_LABEL = { admin: 'Admin', manager: 'Manager', cashier: 'Cashier', scanner: 'Scanner' };
 export const ROLE_HELP = {
   admin: 'Everything, including users, branding and the activity log',

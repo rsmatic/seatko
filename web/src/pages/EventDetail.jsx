@@ -43,6 +43,7 @@ export default function EventDetail() {
               <h1>{event.title} <Badge status={event.status} /></h1>
               <div className="muted">{event.artist} · {dateTime(event.starts_at)} · {event.venue || 'Venue TBA'}</div>
             </div>
+            {can(...MANAGE) && <Link className="btn" to={`/events/${id}/banner`}>Print buyer's guide</Link>}
           </div>
           <Tabs value={active.key} onChange={(k) => nav(`/events/${id}/${k}`)}
             tabs={tabs.map((t) => (t.key === 'requests' && event.summary.pending_requests ? { ...t, label: `Requests (${event.summary.pending_requests})` } : t))} />
