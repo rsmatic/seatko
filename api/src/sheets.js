@@ -7,7 +7,7 @@ import { db, getSettings } from './db.js';
 
 export const isSheetUrl = (u) => /^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(String(u || '').trim());
 
-const METHOD = { gcash: 'GCash', maya: 'Maya', bank_transfer: 'Bank transfer', other: 'Other' };
+const METHOD = { gcash: 'GCash', maya: 'Maya', bank_transfer: 'Bank transfer', cash: 'Cash', other: 'Other' };
 const STATUS = { pending: 'Pending', approved: 'Approved', rejected: 'Rejected' };
 
 function manila(utc) {

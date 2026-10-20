@@ -103,7 +103,7 @@ function shell(org, inner, footer) {
   </table></td></tr></table></body></html>`;
 }
 
-const METHOD_LABEL = { gcash: 'GCash', maya: 'Maya', bank_transfer: 'bank transfer', other: 'other' };
+const METHOD_LABEL = { gcash: 'GCash', maya: 'Maya', bank_transfer: 'bank transfer', cash: 'cash', other: 'other' };
 const methodLabel = (m) => METHOD_LABEL[m] ?? m;
 const requestLines = (req) => JSON.parse(req.items).map((i) => `${i.qty} × ${i.tier_name}`);
 const peso = (c) => `₱${(c / 100).toLocaleString('en-PH', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;

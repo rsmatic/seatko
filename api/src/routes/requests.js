@@ -12,7 +12,7 @@ import { pushToSheet } from '../sheets.js';
 import { createOrder, emailOrder, loadOrder, orgReplyTo } from './sales.js';
 import { h, str, oneOf, bad, notFound, randomCode, HttpError } from '../util.js';
 
-export const REQUEST_METHODS = ['gcash', 'maya', 'bank_transfer', 'other'];
+export const REQUEST_METHODS = ['gcash', 'maya', 'bank_transfer', 'cash', 'other'];
 
 export const requestsEnabled = (orgId) => getSettings(orgId).online_requests !== '0';
 
@@ -56,7 +56,8 @@ publicRequests.post('/events/:id/requests', uploadProof.single('proof'), h(async
     const method = oneOf(req.body.payment_method, 'Payment method', requestMethods(ev.org_id), { required: true });
     const paymentRef = str(req.body.payment_ref, 'Reference number', { max: 100 }) ?? '';
     const note = str(req.body.note, 'Note', { max: 500 }) ?? '';
-    if (!req.file) throw bad('Please upload a screenshot or photo of your payment');
+    // Cash is paid in person, so there is no screenshot to upload.
+    if (!req.file && method !== 'cash') throw bad('Please upload a screenshot or photo of your payment');
 
     let wanted;
     try { wanted = JSON.parse(req.body.items || '[]'); } catch { wanted = null; }
@@ -82,7 +83,7 @@ publicRequests.post('/events/:id/requests', uploadProof.single('proof'), h(async
     const { lastInsertRowid: id } = db.prepare(`
       INSERT INTO ticket_requests (org_id, event_id, reference, buyer_name, buyer_email, buyer_phone, payment_method, payment_ref, items, amount_cents, proof, note)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(ev.org_id, ev.id, reference, name, email, phone, method, paymentRef, JSON.stringify(items), amount, req.file.filename, note);
+    `).run(ev.org_id, ev.id, reference, name, email, phone, method, paymentRef, JSON.stringify(items), amount, req.file?.filename ?? null, note);
     req.orgId = ev.org_id;
     audit(req, 'request_received', 'ticket_request', id, { reference, event: ev.id, tickets: count, amount_cents: amount });
 

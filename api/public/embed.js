@@ -261,8 +261,8 @@
     var phone = field(form, 'Mobile number *', el('input'));
     phone.type = 'tel';
     phone.autocomplete = 'tel';
-    var LABELS = { gcash: 'GCash', maya: 'Maya', bank_transfer: 'Bank transfer', other: 'Other' };
-    var methods = (ev.payment_methods && ev.payment_methods.length ? ev.payment_methods : ['gcash', 'maya', 'bank_transfer', 'other']);
+    var LABELS = { gcash: 'GCash', maya: 'Maya', bank_transfer: 'Bank transfer', cash: 'Cash', other: 'Other' };
+    var methods = (ev.payment_methods && ev.payment_methods.length ? ev.payment_methods : ['gcash', 'maya', 'bank_transfer', 'cash', 'other']);
     var method;
     if (methods.length === 1) {
       // Only one accepted method: show it as fixed text instead of a choice.
@@ -310,6 +310,14 @@
       form.appendChild(ask);
     }
 
+    // Cash is paid in person: no reference number or screenshot to give.
+    function isCash() { return method.value === 'cash'; }
+    function showCashFields() {
+      ref.parentNode.style.display = proof.parentNode.style.display = isCash() ? 'none' : '';
+    }
+    if (method.addEventListener) method.addEventListener('change', showCashFields);
+    showCashFields();
+
     var items = [];
     var hint = status.textContent;
     function fail(msg) {
@@ -328,8 +336,8 @@
       if (!name.value.trim()) return fail('Please enter your full name.');
       if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(email.value.trim())) return fail('Please enter a valid email address.');
       if (!phone.value.trim()) return fail('Please enter your mobile number.');
-      if (!proof.files[0]) return fail('Please attach a screenshot of your payment.');
-      if (proof.files[0].size > 5 * 1024 * 1024) return fail('The screenshot is too large (max 5 MB).');
+      if (!proof.files[0] && !isCash()) return fail('Please attach a screenshot of your payment.');
+      if (proof.files[0] && proof.files[0].size > 5 * 1024 * 1024) return fail('The screenshot is too large (max 5 MB).');
 
       var fd = new FormData();
       fd.append('buyer_name', name.value.trim());
@@ -340,7 +348,7 @@
       fd.append('note', note.value.trim());
       fd.append('website', trap.value);
       fd.append('items', JSON.stringify(items));
-      fd.append('proof', proof.files[0]);
+      if (proof.files[0]) fd.append('proof', proof.files[0]);
 
       submit.disabled = true;
       submit.textContent = 'Sending…';

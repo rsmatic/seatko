@@ -120,7 +120,7 @@ function RequestsSettings() {
       <div className="field">
         <span className="field-label">Payment methods buyers can choose</span>
         <div className="seg">
-          {[['gcash', 'GCash'], ['maya', 'Maya'], ['bank_transfer', 'Bank transfer'], ['other', 'Other']].map(([k, v]) => (
+          {[['gcash', 'GCash'], ['maya', 'Maya'], ['bank_transfer', 'Bank transfer'], ['cash', 'Cash'], ['other', 'Other']].map(([k, v]) => (
             <label key={k}><input type="checkbox" checked={methods.has(k)} onChange={() => toggleMethod(k)} /> {v}</label>
           ))}
         </div>

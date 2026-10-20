@@ -7,7 +7,7 @@ import { Badge, Empty, Field, Loadable, Modal, Tabs } from '../../components/ui.
 import { ProofImage } from '../../components/BillingBits.jsx';
 import SeatMap from '../../components/SeatMap.jsx';
 
-const METHOD = { gcash: 'GCash', maya: 'Maya', bank_transfer: 'Bank transfer', other: 'Other' };
+const METHOD = { gcash: 'GCash', maya: 'Maya', bank_transfer: 'Bank transfer', cash: 'Cash', other: 'Other' };
 const STATUS_BADGE = { pending: ['sold_out', 'Pending'], approved: ['paid', 'Approved'], rejected: ['void', 'Rejected'] };
 
 const itemsText = (items) => items.map((i) => `${i.qty} × ${i.tier_name}`).join(', ');
